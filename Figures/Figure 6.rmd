@@ -1,0 +1,473 @@
+---
+title: "DE geneset by wilcox test"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+```{r set-up}
+knitr::opts_chunk$set(echo = TRUE, autodep=TRUE, message=FALSE, warning=FALSE)
+
+rm(list=ls()) 
+gc()
+
+library(Seurat)
+library(ggplot2)
+library(stringr)
+library(matrixTests)
+library(tidyverse)
+library(hrbrthemes)
+library(viridis)
+library(forcats)
+library(dplyr)
+library(tidyr)
+library(Seurat)
+library(genefilter)
+library(GSEABase)
+library(scales)
+library(ggthemes)
+library(RColorBrewer)
+
+mypal = brewer.pal(n = 9, name = "Pastel1")
+show_col(mypal)
+
+mycol <- c(mypal[2],mypal[1])
+names(mycol) <- c("AS-","AS+")
+show_col(mycol)
+
+mypal = c("#A7CEE2","#428DBF","#F0E442","#E0271E","#EB8E47","#7A52A6","#C1A9D2")
+show_col(mypal)
+names(mypal) <- c("AddModuleScore","AUCell","JASMINE","scPS","SCSE","UCell","ssGSEA")
+
+# set the theme for ggplot2
+My_Theme <- theme(axis.ticks = element_blank(),
+                  legend.title=element_blank(),
+                  #legend.position = "bottom", 
+                  #legend.direction = "horizontal", 
+                  #legend.justification='center',
+                  plot.caption = element_text(hjust = 0.5, vjust = -1, size=14))
+```
+
+```{r load data and KEGG}
+## ----Assign gene signature for simulation--------------------------------------------------
+# load the simulated data
+setwd("/Users/rwang4/Library/CloudStorage/Box-Box/Ruoqiao Thakar Lab/Single-cell Pathway Score (scPS)/Data & results/HIV and B cell/")
+load("~/Library/CloudStorage/Box-Box/Ruoqiao Thakar Lab/Single-cell Pathway Score (scPS)/Data & results/HIV and B cell/HIV_data.RData")
+predBind <- GSEABase::getGmt("KEGGpathway 2023.gmt")
+numTF <- length(unique(names(predBind)))
+# FILTER OUT MOTIFS THAT HAVE EITHER TOO MANY OR TOO FEW PREDICTED SITES
+predBindCounts <- sort(setNames(unlist(lapply(predBind, function(x){length(geneIds(x))})), names(predBind)))
+predBind_maxMin <- list(max = 10000, min = 10) # SPECIFY CUTOFFS
+predBindCounts_postThresh <- predBindCounts[(predBindCounts >= predBind_maxMin$min)&
+                                                (predBindCounts <= predBind_maxMin$max)]
+predBind <- predBind[names(predBind) %in% names(predBindCounts_postThresh)]
+print(length(predBind))
+predBind <- geneIds(predBind)
+
+# Set the directory path where the score files are located
+score_dir_path <- "/Users/rwang4/Library/CloudStorage/Box-Box/Ruoqiao Thakar Lab/Single-cell Pathway Score (scPS)/Data & results/HIV and B cell/KEGG/"
+# Set the directory path where the simulated data files are located
+score_dir_path.data <- "/Users/rwang4/Library/CloudStorage/Box-Box/Ruoqiao Thakar Lab/Single-cell Pathway Score (scPS)/Data & results/HIV and B cell/KEGG/"
+```
+
+```{r load gene set enrichment score}
+setwd(score_dir_path)
+# List all files in the directory
+score_file_list <- list.files(score_dir_path,recursive = F, full.names = F)
+scPS_rep <- score_file_list[grep("scPS",score_file_list)]
+ssGSEA_rep <- score_file_list[grep("ssGSEA",score_file_list)]
+AUCell_rep <- score_file_list[grep("AUCell",score_file_list)]
+JASMINE_rep <- score_file_list[grep("JASMINE",score_file_list)]
+UCell_rep <- score_file_list[grepl("UCell", score_file_list) & !grepl("AUCell", score_file_list)]
+SCSE_rep <- score_file_list[grep("scSE",score_file_list)]
+Add_rep <- score_file_list[grep("AddModuleScore",score_file_list)]
+
+scPS <- list()
+ssGSEA <- list()
+JASMINE <- list()
+AUCell <- list()
+UCell <- list()
+SCSE <- list()
+AddModule <- list()
+for (repl in 1:1){
+  scPS[[repl]] <- read.csv(scPS_rep[repl],header = T,row.names = 1)
+  #rownames(scPS[[repl]]) <- gsub("_","-",rownames(scPS[[repl]]))
+  AUCell[[repl]] <- read.csv(AUCell_rep[repl],header = T,row.names = 1)
+  ssGSEA[[repl]] <- read.csv(ssGSEA_rep[repl],header = T,row.names = 1)
+  JASMINE[[repl]] <- read.csv(JASMINE_rep[repl],header = T,row.names = 1)
+  UCell[[repl]] <- read.csv(UCell_rep[repl],header = T,row.names = 1)
+  SCSE[[repl]] <- read.csv(SCSE_rep[repl],header = T,row.names = 1)
+  AddModule[[repl]] <- read.csv(Add_rep[repl],header = T,row.names = 1)
+}
+```
+
+```{r Load simulated data}
+setwd(score_dir_path.data)
+clusters <- unique(Participant.seurat@meta.data$ClusterName)
+Idents(Participant.seurat) <- "ClusterName"
+table(Idents(Participant.seurat))
+Participant.seurat.1 <-  subset(x=Participant.seurat,idents=c("T cells CD8 - 1","T cells CD8 - 2","T cells CD8 - 3","T cells CD8 - 4"))
+Idents(Participant.seurat.1) <- "PlaqueScore"
+table(Idents(Participant.seurat.1))
+
+Group1.scPS <- list()
+Group2.scPS <- list()
+Group1.ssGSEA <- list()
+Group2.ssGSEA <- list()
+Group1.AUCell <- list()
+Group2.AUCell <- list()
+Group1.JASMINE <- list()
+Group2.JASMINE <- list()
+Group1.UCell <- list()
+Group2.UCell <- list()
+Group1.SCSE <- list()
+Group2.SCSE <- list()
+Group1.AddModule <- list()
+Group2.AddModule <- list()
+
+for (repl in 1:1){
+  Group1.scPS[[repl]] <-  scPS[[repl]][,Participant.seurat.1@meta.data$PlaqueScore %in% 'AS-']
+  Group2.scPS[[repl]] <-  scPS[[repl]][,Participant.seurat.1@meta.data$PlaqueScore %in% 'AS+']
+  
+  Group1.ssGSEA[[repl]] <-  ssGSEA[[repl]][,Participant.seurat.1@meta.data$PlaqueScore %in% 'AS-']
+  Group2.ssGSEA[[repl]] <-  ssGSEA[[repl]][,Participant.seurat.1@meta.data$PlaqueScore %in% 'AS+']
+  
+  Group1.AUCell[[repl]] <-  AUCell[[repl]][,Participant.seurat.1@meta.data$PlaqueScore %in% 'AS-']
+  Group2.AUCell[[repl]] <-  AUCell[[repl]][,Participant.seurat.1@meta.data$PlaqueScore %in% 'AS+']
+  
+  Group1.JASMINE[[repl]] <-  JASMINE[[repl]][,Participant.seurat.1@meta.data$PlaqueScore %in% 'AS-']
+  Group2.JASMINE[[repl]] <-  JASMINE[[repl]][,Participant.seurat.1@meta.data$PlaqueScore %in% 'AS+']
+  
+  Group1.UCell[[repl]] <-  UCell[[repl]][,Participant.seurat.1@meta.data$PlaqueScore %in% 'AS-']
+  Group2.UCell[[repl]] <-  UCell[[repl]][,Participant.seurat.1@meta.data$PlaqueScore %in% 'AS+']
+  
+  Group1.SCSE[[repl]] <-  SCSE[[repl]][,Participant.seurat.1@meta.data$PlaqueScore %in% 'AS-']
+  Group2.SCSE[[repl]] <-  SCSE[[repl]][,Participant.seurat.1@meta.data$PlaqueScore %in% 'AS+']
+  
+  Group1.AddModule[[repl]] <-  AddModule[[repl]][,Participant.seurat.1@meta.data$PlaqueScore %in% 'AS-']
+  Group2.AddModule[[repl]] <-  AddModule[[repl]][,Participant.seurat.1@meta.data$PlaqueScore %in% 'AS+']
+  
+}
+```
+
+```{r wilcoxon two sample test two.sided}
+wilcoxon.scPS <- list()
+geneset.scPS <- list()
+
+wilcoxon.ssGSEA <- list()
+geneset.ssGSEA <- list()
+
+wilcoxon.AUCell <- list()
+geneset.AUCell <- list()
+
+wilcoxon.JASMINE <- list()
+geneset.JASMINE <- list()
+
+wilcoxon.UCell <- list()
+geneset.UCell <- list()
+
+wilcoxon.SCSE <- list()
+geneset.SCSE <- list()
+
+wilcoxon.AddModule <- list()
+geneset.AddModule <- list()
+library(matrixTests)
+
+for (repl in 1:1){
+  wilcoxon.scPS[[repl]] <- row_wilcoxon_twosample(Group1.scPS[[repl]], Group2.scPS[[repl]], alternative = 'two.sided', exact =NA, correct = T)
+  wilcoxon.scPS[[repl]]$FDR<- p.adjust(wilcoxon.scPS[[repl]]$pvalue,method ="fdr" )
+  wilcoxon.scPS[[repl]]  <- wilcoxon.scPS[[repl]][which(wilcoxon.scPS[[repl]] $FDR < 0.05 ),]
+  geneset.scPS[[repl]] <- rownames(wilcoxon.scPS[[repl]])
+  
+  wilcoxon.ssGSEA[[repl]] <- row_wilcoxon_twosample(Group1.ssGSEA[[repl]], Group2.ssGSEA[[repl]], alternative = 'two.sided', exact =NA, correct = T)
+  wilcoxon.ssGSEA[[repl]]$FDR<- p.adjust(wilcoxon.ssGSEA[[repl]]$pvalue,method ="fdr" )
+  wilcoxon.ssGSEA[[repl]]   <- wilcoxon.ssGSEA[[repl]][which(wilcoxon.ssGSEA[[repl]] $FDR < 0.05 ),]
+  geneset.ssGSEA[[repl]]  <- rownames(wilcoxon.ssGSEA[[repl]])
+  
+  wilcoxon.AUCell[[repl]] <- row_wilcoxon_twosample(Group1.AUCell[[repl]], Group2.AUCell[[repl]], alternative = 'two.sided', exact =NA, correct = T)
+  wilcoxon.AUCell[[repl]]$FDR<-  p.adjust(wilcoxon.AUCell[[repl]]$pvalue,method ="fdr" )
+  wilcoxon.AUCell[[repl]]  <- wilcoxon.AUCell[[repl]][which(wilcoxon.AUCell[[repl]] $FDR < 0.05 ),]
+  geneset.AUCell[[repl]] <- rownames(wilcoxon.AUCell[[repl]])
+  
+  wilcoxon.JASMINE[[repl]] <- row_wilcoxon_twosample(Group1.JASMINE[[repl]], Group2.JASMINE[[repl]], alternative = 'two.sided', exact =NA, correct = T)
+  wilcoxon.JASMINE[[repl]]$FDR<- p.adjust(wilcoxon.JASMINE[[repl]]$pvalue,method ="fdr" )
+  wilcoxon.JASMINE[[repl]]  <- wilcoxon.JASMINE[[repl]][which(wilcoxon.JASMINE[[repl]] $FDR < 0.05 ),]
+  geneset.JASMINE[[repl]] <- rownames(wilcoxon.JASMINE[[repl]])
+
+  wilcoxon.UCell[[repl]] <- row_wilcoxon_twosample(Group1.UCell[[repl]], Group2.UCell[[repl]], alternative = 'two.sided', exact =NA, correct = T)
+  wilcoxon.UCell[[repl]]$FDR<- p.adjust(wilcoxon.UCell[[repl]]$pvalue,method ="fdr" )
+  wilcoxon.UCell[[repl]]  <- wilcoxon.UCell[[repl]][which(wilcoxon.UCell[[repl]] $FDR < 0.05 ),]
+  geneset.UCell[[repl]] <- rownames(wilcoxon.UCell[[repl]])
+  
+  wilcoxon.SCSE[[repl]] <- row_wilcoxon_twosample(Group1.SCSE[[repl]], Group2.SCSE[[repl]], alternative = 'two.sided', exact =NA, correct = T)
+  wilcoxon.SCSE[[repl]]$FDR<- p.adjust(wilcoxon.SCSE[[repl]]$pvalue,method ="fdr" )
+  wilcoxon.SCSE[[repl]]  <- wilcoxon.SCSE[[repl]][which(wilcoxon.SCSE[[repl]] $FDR < 0.05 ),]
+  geneset.SCSE[[repl]] <- rownames(wilcoxon.SCSE[[repl]])
+  
+  wilcoxon.AddModule[[repl]] <- row_wilcoxon_twosample(Group1.AddModule[[repl]], Group2.AddModule[[repl]], alternative = 'two.sided', exact =NA, correct = T)
+  wilcoxon.AddModule[[repl]]$FDR<- p.adjust(wilcoxon.AddModule[[repl]]$pvalue,method ="fdr" )
+  wilcoxon.AddModule[[repl]]  <- wilcoxon.AddModule[[repl]][which(wilcoxon.AddModule[[repl]] $FDR < 0.05 ),]
+  geneset.AddModule[[repl]] <- rownames(wilcoxon.AddModule[[repl]])
+}
+## ----calulate--------------------------------------------------
+all_num <- mat.or.vec(nr = 7 ,nc = 2)
+rownames(all_num) <- c('scPS','UCell','AUCell','JASMINE','ssGSEA','scSE','AddModule')
+colnames(all_num) <- c('KEGG','WIKI')
+dat.list <- list()
+for (repl in 1:1){
+dat.list[[repl]] <- list(scPS=geneset.scPS[[repl]],
+                  UCell=geneset.UCell[[repl]],
+                  AUCell=geneset.AUCell[[repl]],                                                                                            
+                  JASMINE=geneset.JASMINE[[repl]],
+                  ssGSEA=geneset.ssGSEA[[repl]],
+                  SCSE=geneset.SCSE[[repl]],
+                  AddModule=geneset.AddModule[[repl]])
+}
+
+for (i in rownames(all_num)){
+    for (j in 1:1){
+      num <- length(dat.list[[j]][[i]])
+      all_num[i,j] <- num
+    }
+}
+
+
+#write.csv(all_num, "Two side dat matrix.csv")
+```
+
+```{r scBONITA}
+library(readxl)
+scBonita <- read_xlsx("./scBonita.xlsx")
+T_clusrers<- unique(scBonita$Subpopulation)[grepl("T", unique(scBonita$Subpopulation))]
+scBonita <- scBonita %>% 
+  filter(`Pathway Name`%in% rownames(scPS[[1]]))%>%
+  filter(Subpopulation %in% T_clusrers)
+
+shared_vector <- c(geneset.SCSE[[1]],geneset.ssGSEA[[1]],geneset.AddModule[[1]],geneset.UCell[[1]], geneset.AUCell[[1]], geneset.JASMINE[[1]])
+setdiff(intersect(scBonita$`Pathway Name`,fdr_values_scPS$KEGG),shared_vector)
+
+setdiff(scBonita$`Pathway Name`,fdr_values_scPS$KEGG)
+```
+
+
+```{r venn plot}
+#### VennDiagram ####
+library(VennDiagram)
+library(UpSetR)
+
+dat.list <- list()
+for (repl in 1:1){
+dat.list[[repl]] <- list(scPS=geneset.scPS[[repl]],
+                  UCell=geneset.UCell[[repl]],
+                  AUCell=geneset.AUCell[[repl]],                                                                                            
+                  JASMINE=geneset.JASMINE[[repl]],
+                  ssGSEA=geneset.ssGSEA[[repl]],
+                  SCSE=geneset.SCSE[[repl]],
+                  AddModule=geneset.AddModule[[repl]],
+                  scBONITA=scBonita$`Pathway Name`)
+}
+
+
+
+Venn_data <- dat.list[[1]]
+Venn_data <- fromList(Venn_data)
+
+mypal = c("#A7CEE2","#428DBF","#F0E442","#E0271E","#EB8E47","#7A52A6","#C1A9D2","black")
+show_col(mypal)
+names(mypal) <- c("AddModuleScore","AUCell","JASMINE","scPS","SCSE","UCell","ssGSEA","scBONITA")
+
+
+pdf(file="Upset plot for KEGG_CD8 Tcell with FDR 0.05.pdf")
+upset(Venn_data,
+      sets = c("UCell",'ssGSEA','scPS','JASMINE','AUCell','AddModule','SCSE',"scBONITA"),
+      keep.order = T,
+      point.size = 3,
+      line,line.size = 1,
+      number.angles = 0,
+      text.scale = 1.5,
+      order.by = "degree",
+      matrix.color = "#4285F4",
+      main.bar.color = "black",
+      sets.bar.color = mypal,
+      sets.x.label= "Size")
+dev.off()
+```
+
+```{r bubble plot}
+repl = 1
+fdr_values_scPS = data.frame(KEGG=rownames(wilcoxon.scPS[[repl]]), FDR=wilcoxon.scPS[[repl]][, "FDR"])
+fdr_values_scPS$Method ="scPS"
+fdr_values_ssGSEA=data.frame(KEGG=rownames(wilcoxon.ssGSEA[[repl]]), FDR=wilcoxon.ssGSEA[[repl]][, "FDR"])
+fdr_values_ssGSEA$Method ="ssGSEA"
+fdr_values_AUCell=data.frame(KEGG=rownames(wilcoxon.AUCell[[repl]]), FDR=wilcoxon.AUCell[[repl]][, "FDR"])
+fdr_values_AUCell$Method ="AUCell"
+fdr_values_JASMINE=data.frame(KEGG=rownames(wilcoxon.JASMINE[[repl]]), FDR=wilcoxon.JASMINE[[repl]][, "FDR"])
+fdr_values_JASMINE$Method ="JASMINE"
+fdr_values_UCell=data.frame(KEGG=rownames(wilcoxon.UCell[[repl]]), FDR=wilcoxon.UCell[[repl]][, "FDR"])
+fdr_values_UCell$Method ="UCell"
+fdr_values_SCSE=data.frame(KEGG=rownames(wilcoxon.SCSE[[repl]]), FDR=wilcoxon.SCSE[[repl]][, "FDR"])
+fdr_values_SCSE$Method ="SCSE"
+fdr_values_AddModule=data.frame(KEGG=rownames(wilcoxon.AddModule[[repl]]), FDR=wilcoxon.AddModule[[repl]][, "FDR"])
+fdr_values_AddModule$Method ="AddModuleScore"
+
+# Unlist FDR values from the wilcoxon.list
+fdr_values <- rbind(fdr_values_scPS,fdr_values_ssGSEA,fdr_values_SCSE,fdr_values_AUCell,fdr_values_JASMINE,fdr_values_UCell,fdr_values_AddModule)
+
+# bubble 
+# pdf(file="bubble plot for KEGG_CD8 Tcell with FDR 0.05.pdf")
+
+fdr_values$Method <- factor(fdr_values$Method, levels=c("AddModuleScore","AUCell","JASMINE","scPS","SCSE","UCell","ssGSEA"))
+
+My_Theme <- theme(axis.ticks = element_blank(),
+                  legend.position = "top", 
+                  legend.direction = "horizontal", 
+                  legend.justification='right',
+                  plot.caption = element_text(hjust = 0.5, vjust = -1, size=14),
+                  legend.title=element_text(size=10), 
+                  legend.text=element_text(size=9),
+                  panel.background = element_rect(fill = NA),
+                  panel.grid.major = element_line(colour = "#e6e6e6"),
+                  panel.ontop = F,
+                  panel.border = element_rect(color = "#333333", fill = NA, size = 1))
+
+# save 6x8 inches, landscape
+p5<-ggplot(fdr_values, aes(x = Method, y = KEGG)) + 
+  geom_point(aes(size = FDR, color = Method, fill= Method), alpha = 0.8, shape = 21) + 
+  theme_bw(base_size=12)+ 
+  My_Theme+
+  scale_color_manual(values=mypal) +
+  scale_fill_manual(values=mypal) +
+  theme(axis.text.x = element_blank(),
+        axis.ticks = element_blank(),
+        legend.position = "bottom")+
+  labs(x= "", y = "") +
+  guides(color = guide_legend(byrow = TRUE, nrow=1),
+         size = guide_legend(byrow = TRUE, nrow=1))
+
+p5
+# dev.off()  
+```
+
+```{r}
+shared_vector <- Reduce(intersect, list(geneset.scPS[[1]], geneset.UCell[[1]], geneset.AUCell[[1]], geneset.JASMINE[[1]]))
+unshared_vector <- setdiff(geneset.scPS[[1]], c(geneset.UCell[[1]], geneset.AUCell[[1]], geneset.JASMINE[[1]],geneset.ssGSEA[[1]]))
+unshared_vector <- setdiff(geneset.ssGSEA[[1]], c(geneset.scPS[[1]],geneset.UCell[[1]], geneset.AUCell[[1]], geneset.JASMINE[[1]]))
+
+Idents(Participant.seurat.1) <- "PlaqueScore"
+table(Idents(Participant.seurat.1))
+
+Participant.seurat.ASp <-  subset(x=Participant.seurat.1,idents="AS+")
+Participant.seurat.ASn <-  subset(x=Participant.seurat.1,idents="AS-")
+
+# only ssGSEA
+a <- Participant.seurat.ASp@assays$RNA@data[rownames(Participant.seurat.ASp@assays$RNA@data) %in% predBind$`Taste transduction`,]
+b <- Participant.seurat.ASn@assays$RNA@data[rownames(Participant.seurat.ASn@assays$RNA@data) %in% predBind$`Taste transduction`,]
+
+# only JASMINE
+c <- Participant.seurat.ASp@assays$RNA@data[rownames(Participant.seurat.ASp@assays$RNA@data) %in% predBind$`Cell cycle`,]
+d <- Participant.seurat.ASn@assays$RNA@data[rownames(Participant.seurat.ASn@assays$RNA@data) %in% predBind$`Cell cycle`,]
+
+# only UCell
+e <- Participant.seurat.ASp@assays$RNA@data[rownames(Participant.seurat.ASp@assays$RNA@data) %in% predBind$`Salmonella infection`,]
+f <- Participant.seurat.ASn@assays$RNA@data[rownames(Participant.seurat.ASn@assays$RNA@data) %in% predBind$`Salmonella infection`,]
+
+# only scPS
+g <- Participant.seurat.ASp@assays$RNA@data[rownames(Participant.seurat.ASp@assays$RNA@data) %in% predBind$`Hepatitis C`,]
+h <- Participant.seurat.ASn@assays$RNA@data[rownames(Participant.seurat.ASn@assays$RNA@data) %in% predBind$`Hepatitis C`,]
+
+# all except ssGSEA
+i <- Participant.seurat.ASp@assays$RNA@data[rownames(Participant.seurat.ASp@assays$RNA@data) %in% predBind$`Human immunodeficiency virus 1 infection`,]
+j <- Participant.seurat.ASn@assays$RNA@data[rownames(Participant.seurat.ASn@assays$RNA@data) %in% predBind$`Human immunodeficiency virus 1 infection`,]
+
+# i <- Participant.seurat.ASp@assays$RNA@data[rownames(Participant.seurat.ASp@assays$RNA@data) %in% predBind$`Intestinal immune network for IgA production`,]
+# j <- Participant.seurat.ASn@assays$RNA@data[rownames(Participant.seurat.ASp@assays$RNA@data) %in% predBind$`Intestinal immune network for IgA production`,]
+
+hist(rowMeans(Participant.seurat@assays$RNA@data==0))
+max(rowMeans(Participant.seurat@assays$RNA@data==0))
+
+
+rows_zeros1 = data.frame(Ratio=(1-rowMeans(a ==0)),KEGG="Taste transduction",Group="AS+")
+rows_zeros2 = data.frame(Ratio=(1-rowMeans(b ==0)),KEGG="Taste transduction",Group="AS-")
+rows_zeros3 <- data.frame(Ratio=(1-rowMeans(g ==0)),KEGG="Hepatitis C",Group="AS+")
+rows_zeros4 <- data.frame(Ratio=(1-rowMeans(h ==0)),KEGG="Hepatitis C",Group="AS-")
+data <- rbind(rows_zeros1,rows_zeros2,rows_zeros3,rows_zeros4)
+
+My_Theme <- theme(axis.ticks = element_blank(),
+                  legend.position = "bottom", 
+                  legend.direction = "vertical", 
+                  legend.justification='center',
+                  plot.caption = element_text(hjust = 0.5, vjust = -1, size=14))
+
+
+data$Ratio = data$Ratio * 100
+
+p1 <- data %>%
+  # mutate(text = fct_reorder(text, value)) %>%
+  ggplot( aes(x=Ratio, color=Group, fill=Group)) +
+    geom_histogram(alpha=1, position = "dodge") +
+    scale_fill_manual(name="Group",values=mycol) +
+    scale_color_manual(name="Group",values=mycol) +
+    xlim(0,100)+
+    xlab("Non-zero gene ratio (%)") +
+    ylab("Number of genes") +
+    facet_wrap(~KEGG)+
+    theme_bw(base_size = 14)+
+    My_Theme+
+    theme(axis.text.x = element_text(angle = 45, hjust = 1),
+          legend.position="top",
+          panel.spacing = unit(0.1, "lines"),
+          strip.text = element_text(size = rel(1)),
+          strip.background = element_rect(fill = "white", colour = "black", size = 1))
+p1
+```
+
+```{r}
+a_sum <- data.frame(GE=colSums(a)/dim(a)[1],KEGG="Taste transduction",Group="AS+")
+b_sum <- data.frame(GE=colSums(b)/dim(b)[1],KEGG="Taste transduction",Group="AS-")
+c_sum <- data.frame(GE=colSums(c)/dim(c)[1],KEGG="Cell cycle",Group="AS+")
+d_sum <- data.frame(GE=colSums(d)/dim(d)[1],KEGG="Cell cycle",Group="AS-")
+e_sum <- data.frame(GE=colSums(e)/dim(e)[1],KEGG="Salmonella infection",Group="AS+")
+f_sum <- data.frame(GE=colSums(f)/dim(f)[1],KEGG="Salmonella infection",Group="AS-")
+g_sum <- data.frame(GE=colSums(g)/dim(g)[1],KEGG="Hepatitis C",Group="AS+")
+h_sum <- data.frame(GE=colSums(h)/dim(h)[1],KEGG="Hepatitis C",Group="AS-")
+i_sum <- data.frame(GE=colSums(i)/dim(i)[1],KEGG="Human immunodeficiency virus 1 infection",Group="AS+")
+j_sum <- data.frame(GE=colSums(j)/dim(j)[1],KEGG="Human immunodeficiency virus 1 infection",Group="AS-")
+
+data <- rbind(a_sum,
+              b_sum,
+              g_sum,
+              h_sum)
+
+p2 <- data %>%
+  # mutate(text = fct_reorder(text, value)) %>%
+  ggplot( aes(x=GE, color=Group, fill=Group)) +
+    geom_histogram(alpha=1, position = "dodge") +
+    scale_fill_manual(values=mycol) +
+    scale_color_manual(values=mycol) +
+    xlab("Average gene expression of gene set") +
+    ylab("Number of cells") +
+    theme_bw(base_size = 14)+
+    My_Theme+
+    facet_wrap(~KEGG)+
+    theme(axis.text.x = element_text(angle = 45, hjust = 1),
+          legend.position="top",
+          panel.spacing = unit(0.1, "lines"),
+          strip.text = element_text(size = rel(1)),
+          strip.background = element_rect(fill = "white", colour = "black", size = 1))
+p2
+```
+
+```{r}
+library(ggpubr)
+
+# save 6x8 inches, portrait
+p.1 <- ggarrange(p1,p2,
+          nrow =2,
+          ncol =1,
+          align='h', 
+          legend = "right",
+          common.legend = T)
+
+p.1
+```
+
+

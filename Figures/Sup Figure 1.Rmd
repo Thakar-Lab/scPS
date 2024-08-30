@@ -1,0 +1,261 @@
+---
+title: "Summary"
+output: html_document
+date: "2024-01-02"
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+setwd("/Users/rwang4/Library/CloudStorage/Box-Box/Ruoqiao Thakar Lab/Single-cell Pathway Score (scPS)/Scrips for NAR-Figure/")
+library(ggplot2)
+library(patchwork)
+library(ggpubr)
+library(scales)
+library(RColorBrewer)
+library(Seurat)
+
+mypal = brewer.pal(n = 9, name = "Pastel1")
+show_col(mypal)
+mycol <- c(mypal[2],mypal[1])
+names(mycol) <- c("RWSD","SSD")
+show_col(mycol)
+
+My_Theme <- theme(axis.ticks = element_blank(),
+                  legend.title=element_blank(),
+                  legend.position = "top", 
+                  legend.direction = "horizontal", 
+                  legend.box = "horizontal",
+                  legend.justification='center',
+                  plot.caption = element_text(hjust = 0.5, vjust = -1, size=14),
+                  panel.background = element_rect(fill = NA),
+                  panel.grid.major = element_line(colour = "#e6e6e6"),
+                  panel.ontop = F,
+                  panel.border = element_rect(color = "#333333", fill = NA, size = 1))
+```
+
+```{r load data}
+# scenario 1
+RWSD.signal <- readRDS(file = "Scenario1_rows_zeros.signal.RWSD.rds")
+RWSD.nonsignal <- readRDS(file = "Scenario1_rows_zeros.nonsignal.RWSD.rds")
+SSD.signal<- readRDS(file = "Scenario1_rows_zeros.signal.SSD.rds")
+SSD.nonsignal<- readRDS(file = "Scenario1_rows_zeros.nonsignal.SSD.rds")
+
+# scenario 2
+RWSD.signal.2 <- readRDS(file = "Scenario2_rows_zeros.signal.RWSD.rds")
+RWSD.nonsignal.2 <- readRDS(file = "Scenario2_rows_zeros.nonsignal.RWSD.rds")
+SSD.signal.2 <- readRDS(file = "Scenario2_rows_zeros.signal.SSD.rds")
+SSD.nonsignal.2 <- readRDS(file = "Scenario2_rows_zeros.nonsignal.SSD.rds")
+```
+
+Scenario 1 Boxplot p.1
+```{r Scenairo 1 Boxplot}
+my_data <- data.frame(RWSD.signal = rep(0,10),
+                      RWSD.nonsignal = rep(0,10),
+                      SSD.signal = rep(0,10),
+                      SSD.nonsignal =rep(0,10))
+# Setting row names as "rep1" to "rep10"
+rownames(my_data) <- paste("rep", 1:10, sep = "")
+# Displaying the created data frame
+print(my_data)
+
+for (i in 1:10){
+  my_data[i,1] <- length(RWSD.signal[[i]])
+  my_data[i,2] <- length(RWSD.nonsignal[[i]])
+  my_data[i,3] <- length(SSD.signal[[i]])
+  my_data[i,4] <- length(SSD.nonsignal[[i]])
+}
+
+my_datasum <- data.frame(Signal=c(my_data[,"SSD.signal"],my_data[,"RWSD.signal"]),
+                         Nonsignal=c(my_data[,"SSD.nonsignal"],my_data[,"RWSD.nonsignal"]))
+my_datasum$Data <- rep(c("SSD","RWSD"),each=10)
+my_datasum$Ratio <- my_datasum$Signal *100 /my_datasum$Nonsignal
+
+p.1 <- ggplot(my_datasum, aes(x = factor(Data, levels = c("SSD","RWSD")), y = Ratio)) + 
+  geom_boxplot(aes(fill = Data),alpha = 1) + 
+  geom_jitter(position=position_jitter(0.2)) +
+  scale_fill_manual(values=mycol,breaks=c('SSD', 'RWSD'))+
+  theme_bw(base_size = 14) +
+  xlab("")+
+  ylab("SNR (%)")+
+  ylim(4,6) +My_Theme+  guides(fill=guide_legend(nrow=1))
+p.1
+```
+
+
+Scenario 2 Boxplot p.2
+```{r Scenairo 2 Boxplot}
+Rmy_data <- data.frame(RWSD.signal = rep(0,10),
+                      RWSD.nonsignal = rep(0,10),
+                      SSD.signal = rep(0,10),
+                      SSD.nonsignal =rep(0,10))
+# Setting row names as "rep1" to "rep10"
+rownames(my_data) <- paste("rep", 1:10, sep = "")
+# Displaying the created data frame
+print(my_data)
+
+for (i in 1:10){
+  my_data[i,1] <- length(RWSD.signal.2[[i]])
+  my_data[i,2] <- length(RWSD.nonsignal.2[[i]])
+  my_data[i,3] <- length(SSD.signal.2[[i]])
+  my_data[i,4] <- length(SSD.nonsignal.2[[i]])
+}
+
+my_datasum <- data.frame(Signal=c(my_data[,"SSD.signal"],my_data[,"RWSD.signal"]),
+                         Nonsignal=c(my_data[,"SSD.nonsignal"],my_data[,"RWSD.nonsignal"]))
+my_datasum$Data <- rep(c("SSD","RWSD"),each=10)
+my_datasum$Ratio <- my_datasum$Signal *100 /my_datasum$Nonsignal
+
+p.2 <- ggplot(my_datasum, aes(x = factor(Data, levels = c("SSD","RWSD")), y = Ratio)) + 
+  geom_boxplot(aes(fill = Data),alpha = 1) + 
+  geom_jitter(position=position_jitter(0.2)) +
+  scale_fill_manual(values=mycol,breaks=c('SSD', 'RWSD'))+
+  theme_bw(base_size = 14) +
+  xlab("")+
+  ylab("SNR (%)")+
+  ylim(4,6) +My_Theme+  guides(fill=guide_legend(nrow=1))
+p.2
+```
+
+Scenario 1 Histgram p.11
+```{r Scenairo 1 Density Plot}
+# Signal
+dat1 <- data.frame(Ratio=unlist(SSD.signal),Data="SSD")
+dat2 <- data.frame(Ratio=unlist(RWSD.signal),Data="RWSD")
+dat3 <- rbind(dat1, dat2)
+dat3$Ratio <- dat3$Ratio*100
+dat3$Ratio <- 100-dat3$Ratio
+
+# Overlaying density plots
+p.11 <- ggplot(dat3, aes(x = Ratio, fill = factor(Data, levels = c("SSD","RWSD")))) + geom_histogram(alpha = 1,position = "dodge")+ 
+  scale_fill_manual(values=mycol)+
+  ylab("Number of genes") + 
+  xlab("Non-zero gene ratio (%)")+
+  theme_bw(base_size = 14) +My_Theme
+p.11 
+
+# Non-signal
+dat1 <- data.frame(Ratio=unlist(SSD.nonsignal),Data="SSD")
+dat2 <- data.frame(Ratio=unlist(RWSD.nonsignal),Data="RWSD")
+dat3 <- rbind(dat1, dat2)
+dat3$Ratio <- dat3$Ratio*100
+dat3$Ratio <- 100-dat3$Ratio
+
+# Overlaying density plots
+p.111 <- ggplot(dat3, aes(x = Ratio, fill = factor(Data, levels = c("SSD","RWSD")))) + geom_histogram(alpha = 1,position = "dodge")+ 
+  scale_fill_manual(values=mycol)+
+  ylab("Number of genes") + 
+  xlab("Non-zero gene ratio (%)")+
+  theme_bw(base_size = 14) +My_Theme+  guides(fill=guide_legend(nrow=1))
+p.111
+```
+
+Scenario1 Histgram p.22
+```{r Scenairo 2 Density Plot}
+# Signal
+dat1 <- data.frame(Ratio=unlist(SSD.signal.2),Data="SSD")
+dat2 <- data.frame(Ratio=unlist(RWSD.signal.2),Data="RWSD")
+dat3 <- rbind(dat1, dat2)
+dat3$Ratio <- dat3$Ratio*100
+dat3$Ratio <- 100-dat3$Ratio
+
+# Overlaying density plots
+p.22 <- ggplot(dat3, aes(x = Ratio, fill = factor(Data, levels = c("SSD","RWSD")))) + geom_histogram(alpha = 1,position = "dodge")+ 
+  scale_fill_manual(values=mycol)+
+  ylab("Number of genes") + 
+  xlab("Non-zero gene ratio (%)")+
+  theme_bw(base_size = 14) +My_Theme
+p.22
+
+# Non-signal
+dat1 <- data.frame(Ratio=unlist(SSD.nonsignal.2),Data="SSD")
+dat2 <- data.frame(Ratio=unlist(RWSD.nonsignal.2),Data="RWSD")
+dat3 <- rbind(dat1, dat2)
+dat3$Ratio <- dat3$Ratio*100
+dat3$Ratio <- 100-dat3$Ratio
+
+# Overlaying density plots
+p.222 <- ggplot(dat3, aes(x = Ratio, fill = factor(Data, levels = c("SSD","RWSD")))) + geom_histogram(alpha = 1,position = "dodge")+ 
+  scale_fill_manual(values=mycol)+
+  ylab("Number of genes") + 
+  xlab("Non-zero gene ratio (%)")+
+  theme_bw(base_size = 14) +My_Theme+  guides(fill=guide_legend(nrow=1))
+p.222
+```
+
+```{r}
+p_DimPlot<-list()
+```
+
+```{r RWSD.1}
+load("~/Library/CloudStorage/Box-Box/Ruoqiao Thakar Lab/Single-cell Pathway Score (scPS)/Scrips for NAR-Figure/Scenario1_rep1 sim_RWSD.RData")
+Participant.integrated.1 <- FindVariableFeatures(Participant.integrated.1, selection.method = "vst", nfeatures = 2000)
+Participant.integrated.1 <- RunPCA(Participant.integrated.1, features = VariableFeatures(object = Participant.integrated.1), verbose = F)
+Participant.integrated.1$Group <- ifelse(Participant.integrated.1$Condition == "Condition_1", "Control", "Treatment")
+Idents(Participant.integrated.1) <- "Group"
+p_DimPlot[["RWSD.1"]] <- DimPlot(Participant.integrated.1, reduction = "pca", label.size = 1,cols = mypal) + ylim(-60,40) +xlim(-40,15)+ My_Theme
+p_DimPlot[["RWSD.1"]]
+```
+
+```{r RWSD.2}
+load("~/Library/CloudStorage/Box-Box/Ruoqiao Thakar Lab/Single-cell Pathway Score (scPS)/Scrips for NAR-Figure/Scenario2_rep1 sim_RWSD.RData")
+Participant.integrated.1 <- FindVariableFeatures(Participant.integrated.1, selection.method = "vst", nfeatures = 2000)
+Participant.integrated.1 <- RunPCA(Participant.integrated.1, features = VariableFeatures(object = Participant.integrated.1), verbose = F)
+Participant.integrated.1$Group <- ifelse(Participant.integrated.1$Condition == "Condition_1", "Control", "Treatment")
+Idents(Participant.integrated.1) <- "Group"
+p_DimPlot[["RWSD.2"]] <- DimPlot(Participant.integrated.1, reduction = "pca", label.size = 1,cols = mypal)+ ylim(-60,40)+xlim(-40,15)+My_Theme
+```
+
+```{r SSD.1}
+load("~/Library/CloudStorage/Box-Box/Ruoqiao Thakar Lab/Single-cell Pathway Score (scPS)/Scrips for NAR-Figure/Scenario1_rep1 sim_SSD.RData")
+Participant.integrated.1 <- FindVariableFeatures(Participant.integrated.1, selection.method = "vst", nfeatures = 2000)
+Participant.integrated.1 <- RunPCA(Participant.integrated.1, features = VariableFeatures(object = Participant.integrated.1), verbose = F)
+Participant.integrated.1$Group <- ifelse(Participant.integrated.1$Condition == "Condition_1", "Control", "Treatment")
+Idents(Participant.integrated.1) <- "Group"
+p_DimPlot[["SSD.1"]] <- DimPlot(Participant.integrated.1, reduction = "pca", label.size = 1,cols = mypal)+ ylim(-60,40)+xlim(-40,15)+My_Theme
+```
+
+```{r SSD.2}
+load("~/Library/CloudStorage/Box-Box/Ruoqiao Thakar Lab/Single-cell Pathway Score (scPS)/Scrips for NAR-Figure/Scenario2_rep1 sim_SSD.RData")
+Participant.integrated.1 <- FindVariableFeatures(Participant.integrated.1, selection.method = "vst", nfeatures = 2000)
+Participant.integrated.1 <- RunPCA(Participant.integrated.1, features = VariableFeatures(object = Participant.integrated.1), verbose = F)
+Participant.integrated.1$Group <- ifelse(Participant.integrated.1$Condition == "Condition_1", "Control", "Treatment")
+Idents(Participant.integrated.1) <- "Group"
+p_DimPlot[["SSD.2"]] <- DimPlot(Participant.integrated.1, reduction = "pca", label.size = 1,cols = mypal)+ ylim(-60,40)+xlim(-40,15)+My_Theme
+```
+
+```{r}
+p_DimPlot
+names(p_DimPlot)
+```
+```{r plot Scenario 1}
+p1 <- ggarrange(p_DimPlot$SSD.1,p_DimPlot$RWSD.1,
+               p_DimPlot$SSD.2,p_DimPlot$RWSD.2,
+               nrow =2,
+               ncol =2,
+               align='hv', 
+               legend="top",
+               labels=c('A','B','C','D'),
+               common.legend = T)
+p1
+pdf('/Users/rwang4/Desktop/SFigure 1A.pdf', width = 10, height = 4.5)
+p1
+dev.off()
+```
+```{r}
+p2 <- ggarrange(p.1,p.2,
+               p.11, p.22, 
+               p.111, p.222,
+               nrow =3,
+               ncol =2,
+               align='h', 
+               legend="top",
+               labels=c('E','F','G','H','I','J'),
+               common.legend = T)
+p2
+pdf('/Users/rwang4/Desktop/SFigure 1E.pdf', width = 10, height = 8)
+p2
+dev.off()
+```
+
+

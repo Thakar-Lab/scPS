@@ -1,0 +1,343 @@
+setwd("/Users/rwang4/Library/CloudStorage/Box-Box/Ruoqiao Thakar Lab/Single-cell Pathway Score (scPS)/Data & results/HIV and B cell/")
+if(!require(Seurat))install.packages("Seurat")
+if(!require(ggplot2))install.packages("ggplot2")
+if(!require(dplyr))install.packages("dplyr")
+library(ggsci)
+library(ggrepel)
+rm(list=ls()) 
+gc()
+
+# DONE and just load HIV_data.RData
+load("/gpfs/fs2/scratch/rwang46/Single Cell Pathway Score_scPS/Job 3 HIV-AS scRNA data/Data/Integrated Participant with raw counts.RData")
+# UMAP and TSNE
+Participant.seurat <- FindVariableFeatures(Participant.seurat,selection.method = "vst",nfeatures=664)
+Participant.seurat <- ScaleData(Participant.seurat, features =  rownames(Participant.seurat)) 
+Participant.seurat <- RunPCA(Participant.seurat, features = VariableFeatures(object = Participant.seurat))
+ElbowPlot(Participant.seurat)
+Participant.seurat <- RunUMAP(Participant.seurat, dims = 1:10) 
+Participant.seurat <- RunTSNE(Participant.seurat, dims = 1:10) 
+save(Participant.seurat,file="HIV_data.RData")
+
+# Started here 
+###########################################################################################################################################
+# TSNE plot
+load("~/Library/CloudStorage/Box-Box/Ruoqiao Thakar Lab/Single-cell Pathway Score (scPS)/Data & results/HIV and B cell/HIV_data.RData")
+Idents(Participant.seurat) <- "ClusterName"
+DimPlot(Participant.seurat, reduction = "tsne",label = T, pt.size = 0.8) + xlab("UMAP 1") + ylab("UMAP 2") +
+  theme(axis.title = element_text(size = 10), legend.text = element_text(size = 10)) + 
+  guides(colour = guide_legend(override.aes = list(size = 5))) +NoLegend()
+
+umap = Participant.seurat@reductions$tsne@cell.embeddings %>%
+  as.data.frame() %>% 
+  cbind(cell_type = Participant.seurat@meta.data$ClusterName)
+
+cell_type_med <- umap %>%
+  group_by(cell_type) %>%
+  summarise(
+    tSNE_1 = median(tSNE_1),
+    tSNE_2 = median(tSNE_2))
+
+# set the colour
+colour <- pal_d3("category20",alpha = 0.6)(16)
+cluster <- unique(umap$cell_type)
+cluster <- cluster[order(cluster)]
+names(colour) <- cluster
+
+p <- ggplot(umap,aes(x= tSNE_1 , y = tSNE_2 ,color = cell_type)) +
+  geom_point(size = 1 , alpha =0.8 )  +
+  scale_color_manual(values = colour)+
+  theme(panel.grid.major = element_blank(), #主网格线
+        panel.grid.minor = element_blank(), #次网格线
+        panel.border = element_rect(colour = "black",fill = NA), #边框
+        axis.ticks = element_blank(),
+        panel.background = element_rect(fill = 'white'), #背景色
+        plot.background=element_rect(fill="white"))+
+  theme(legend.title = element_blank(), #去掉legend.title 
+        legend.key=element_rect(fill='white'), #
+        legend.text = element_text(size=10), #设置legend标签的大小
+        legend.key.size=unit(1,'cm') ) +  # 设置legend标签之间的大小
+  guides(color = guide_legend(override.aes = list(size=5)))+ #设置legend中点的大小
+  geom_label_repel(aes(label=cell_type), fontface="bold",data = cell_type_med,
+                   point.padding=unit(0.5, "lines"))+
+  theme(legend.position = "none")
+p
+# pdf("tsne_cluster.pdf",height = 10, width = 10)
+# p
+# dev.off()
+
+library(grid)
+library(gridExtra)
+
+new.spScore <- read.csv("scPS for HIV-data.csv",header = T,row.names = 1)
+AUCell <- read.csv("AUCell for HIV data.csv",header = T,row.names = 1)
+JASMINE <- read.csv("JASMINE for HIV data.csv",header = T,row.names = 1)
+UCell <- read.csv("UCell for HIV data.csv",header = T,row.names = 1)
+ssGSEA <- read.csv("ssGSEA for HIV data.csv",header = T,row.names = 1)
+SCSE<- read.csv("scSE for HIV data.csv",header = T,row.names = 1)
+AddModuleScore<- read.csv("AddModuleScore for HIV data.csv",header = T,row.names = 1)
+
+# ready
+dat <- t(SCSE)
+dat <- cbind(umap,dat)
+dat$cell_type <- gsub("B cells naive - 1|B cells naive - 2|B cells memory", "B cells", dat$cell_type)
+dat$cell_type <- gsub("NK cells resting|NK cells activated", "NK cells", dat$cell_type)
+exclude_cell_type <- c("B cells","NK cells","Monocytes")
+dat$cell_type <- gsub(paste0("^(?!",paste(exclude_cell_type,collapse = "|"),"$).*$"),"T cells", dat$cell_type,perl=T)
+
+# from above
+cell_type_med <- umap %>%
+  group_by(cell_type) %>%
+  summarise(
+    tSNE_1 = median(tSNE_1),
+    tSNE_2 = median(tSNE_2))
+#
+cell_type_med$cell_type  <- gsub("B cells naive - 1|B cells naive - 2|B cells memory", "B cells", cell_type_med$cell_type )
+cell_type_med$cell_type  <- gsub("NK cells resting|NK cells activated", "NK cells", cell_type_med$cell_type )
+cell_type_med$cell_type[7:16]  <- "T cells"
+cell_type_med<- cell_type_med[c(3,4,6,8),]
+
+# Make plots.
+GS <- colnames(dat)[4:16]
+GS <- GS[c(3,8,10,11)]
+# Feature plot
+for (currGS in GS) {
+  p = ggplot(dat, aes(x = tSNE_1, y = tSNE_2, color = get(currGS),label=cell_type)) +
+    geom_point(size = 1, alpha = 0.5) +
+    scale_color_gradient(low = "white", high = "darkblue") +
+    theme(
+      panel.grid.major = element_blank(),
+      panel.grid.minor = element_blank(),
+      panel.border = element_rect(colour = "black", fill = NA),
+      axis.ticks = element_blank(),
+      panel.background = element_rect(fill = 'white'),
+      plot.background = element_rect(fill = "white")
+    ) +
+    theme(
+      legend.title = element_blank(),
+      legend.key = element_rect(fill = 'white'),
+      legend.text = element_text(size = 10),
+      legend.key.size = unit(1, 'cm')
+    ) +
+    guides(color = guide_legend(override.aes = list(size = 5))) +
+    geom_text(
+      data = cell_type_med,
+      aes(x = tSNE_1, y = tSNE_2, label =cell_type),
+      size=5,
+      color = "black")+
+    theme(legend.position = "right") 
+    #ggtitle(currGS)
+  ggsave(p, file=paste0("SCSE featurePlot of", currGS,".pdf"), width = 10, height = 8)
+}
+
+# boxplot
+library(ggpubr)
+dat$cell_type <- factor(dat$cell_type, levels = c("T cells","B cells","NK cells", "Monocytes"))
+dat <- dat[, c("cell_type","Bcell.Act3", "Tcell.Act3", "Monocytes", "NKcell")]
+colnames(dat)
+GS_score <- c("B cell gene set", "T cell gene set", "Monocyte gene set", "NK cell gene set")
+currGS <- "Bcell.Act3"
+p <- ggplot(dat, aes(x=cell_type, y= get(currGS), color=cell_type)) +
+    geom_boxplot()+
+    stat_compare_means(aes(label= "p.signif"))+
+    scale_color_npg()+
+    theme_bw()+
+    labs(x ="", y = paste("SCSE of",GS_score[which(GS ==currGS)])) + NoLegend()
+p
+ggsave(p, file=paste0("SCSE of ",GS_score[which(GS ==currGS)],".pdf"), width = 10, height = 8)
+  
+
+# for (currGS in GS) {
+# p <- ggplot(dat, aes(x=cell_type, y= get(currGS), color=cell_type)) +
+#   geom_boxplot()+
+#   stat_compare_means(aes(label= .p.signif..))+
+#   scale_color_npg()+
+#   theme_bw()+ 
+#   labs(x ="", y = paste("SCSE of",GS_score[which(GS ==currGS)])) + NoLegend()
+# p  
+# ggsave(p, file=paste0("SCSE of ",GS_score[which(GS ==currGS)],".pdf"), width = 10, height = 8)
+# }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

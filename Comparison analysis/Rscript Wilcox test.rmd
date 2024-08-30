@@ -1,0 +1,209 @@
+---
+title: "DE geneset by wilcox test"
+output: html_document
+---
+```{r Set-up}
+knitr::opts_chunk$set(echo = TRUE, autodep=TRUE, message=FALSE, warning=FALSE)
+library(Seurat)
+library(ggplot2)
+library(stringr)
+library(matrixTests)
+```
+
+```{r Set the directory path where the score files are located}
+rm(list=ls()) 
+gc()
+score_dir_path.data <- "/gpfs/fs2/scratch/rwang46/Single Cell Pathway Score_scPS/Job 1 Simulation/Practical/Sample size 200/Scenario 1 scimpute/"
+```
+
+```{r Load Gene set enrichment score}
+score_dir_path <- paste0(score_dir_path.data,"Score/")
+setwd(score_dir_path)
+# List all files in the directory
+score_file_list <- list.files(score_dir_path,recursive = F, full.names = F)
+scPS_rep <- score_file_list[grep("scPS",score_file_list)]
+ssGSEA_rep <- score_file_list[grep("ssGSEA",score_file_list)]
+AUCell_rep <- score_file_list[grep("AUCell",score_file_list)]
+JASMINE_rep <- score_file_list[grep("JASMINE",score_file_list)]
+UCell_rep <- score_file_list[grepl("UCell", score_file_list) & !grepl("AUCell", score_file_list)]
+SCSE_rep <- score_file_list[grepl("scSE", score_file_list)]
+AddModuleScore_rep <- score_file_list[grepl("AddModuleScore", score_file_list)]
+
+scPS <- list()
+ssGSEA <- list()
+JASMINE <- list()
+AUCell <- list()
+UCell <- list()
+SCSE <- list()
+AddModuleScore <- list()
+
+for (repl in 1:10){
+  scPS[[repl]] <- read.csv(scPS_rep[repl],header = T,row.names = 1)
+  rownames(scPS[[repl]]) <- gsub("_","-",rownames(scPS[[repl]]))
+  AUCell[[repl]] <- read.csv(AUCell_rep[repl],header = T,row.names = 1)
+  ssGSEA[[repl]] <- read.csv(ssGSEA_rep[repl],header = T,row.names = 1)
+  JASMINE[[repl]] <- read.csv(JASMINE_rep[repl],header = T,row.names = 1)
+  UCell[[repl]] <- read.csv(UCell_rep[repl],header = T,row.names = 1)
+  SCSE[[repl]] <- read.csv(SCSE_rep[repl],header = T,row.names = 1)
+  rownames(SCSE[[repl]]) <- gsub("_","-",rownames(SCSE[[repl]]))
+  AddModuleScore[[repl]] <- read.csv(AddModuleScore_rep[repl],header = T,row.names = 1)
+  rownames(AddModuleScore[[repl]]) <- gsub("_","-",rownames(AddModuleScore[[repl]]))
+}
+```
+
+```{r Load simulated data}
+setwd(score_dir_path.data)
+file_list <- list.files(score_dir_path.data,recursive = F, full.names = F)
+file_exts <- tools::file_ext(file_list)
+file_splits <- split(file_list,file_exts)
+
+Group1.scPS <- list()
+Group2.scPS <- list()
+Group1.ssGSEA <- list()
+Group2.ssGSEA <- list()
+Group1.AUCell <- list()
+Group2.AUCell <- list()
+Group1.JASMINE <- list()
+Group2.JASMINE <- list()
+Group1.UCell <- list()
+Group2.UCell <- list()
+Group1.SCSE <- list()
+Group2.SCSE <- list()
+Group1.AddModuleScore <- list()
+Group2.AddModuleScore <- list()
+
+for (repl in 1:10){
+  load(file = file_splits$RData[repl])
+  Group1.scPS[[repl]] <-  scPS[[repl]][,Participant.integrated.1@meta.data$Condition %in% 'Condition_1']
+  Group2.scPS[[repl]] <-  scPS[[repl]][,Participant.integrated.1@meta.data$Condition %in% 'Condition_2']
+  
+  Group1.ssGSEA[[repl]] <-  ssGSEA[[repl]][,Participant.integrated.1@meta.data$Condition %in% 'Condition_1']
+  Group2.ssGSEA[[repl]] <-  ssGSEA[[repl]][,Participant.integrated.1@meta.data$Condition %in% 'Condition_2']
+  
+  Group1.AUCell[[repl]] <-  AUCell[[repl]][,Participant.integrated.1@meta.data$Condition %in% 'Condition_1']
+  Group2.AUCell[[repl]] <-  AUCell[[repl]][,Participant.integrated.1@meta.data$Condition %in% 'Condition_2']
+  
+  Group1.JASMINE[[repl]] <-  JASMINE[[repl]][,Participant.integrated.1@meta.data$Condition %in% 'Condition_1']
+  Group2.JASMINE[[repl]] <-  JASMINE[[repl]][,Participant.integrated.1@meta.data$Condition %in% 'Condition_2']
+  
+  Group1.UCell[[repl]] <-  UCell[[repl]][,Participant.integrated.1@meta.data$Condition %in% 'Condition_1']
+  Group2.UCell[[repl]] <-  UCell[[repl]][,Participant.integrated.1@meta.data$Condition %in% 'Condition_2']
+  
+  Group1.SCSE[[repl]] <-  SCSE[[repl]][,Participant.integrated.1@meta.data$Condition %in% 'Condition_1']
+  Group2.SCSE[[repl]] <-  SCSE[[repl]][,Participant.integrated.1@meta.data$Condition %in% 'Condition_2']
+  
+  Group1.AddModuleScore[[repl]] <-  AddModuleScore[[repl]][,Participant.integrated.1@meta.data$Condition %in% 'Condition_1']
+  Group2.AddModuleScore[[repl]] <-  AddModuleScore[[repl]][,Participant.integrated.1@meta.data$Condition %in% 'Condition_2']
+}
+```
+
+```{r wilcoxon two sample test two.sided}
+wilcoxon.scPS <- list()
+geneset.scPS <- list()
+
+wilcoxon.ssGSEA <- list()
+geneset.ssGSEA <- list()
+
+wilcoxon.AUCell <- list()
+geneset.AUCell <- list()
+
+wilcoxon.JASMINE <- list()
+geneset.JASMINE <- list()
+
+wilcoxon.UCell <- list()
+geneset.UCell <- list()
+
+wilcoxon.SCSE <- list()
+geneset.SCSE <- list()
+
+wilcoxon.AddModuleScore <- list()
+geneset.AddModuleScore <- list()
+
+library(matrixTests)
+for (repl in 1:10){
+  wilcoxon.scPS[[repl]] <- row_wilcoxon_twosample(Group1.scPS[[repl]], Group2.scPS[[repl]], alternative = 'two.sided', exact =NA, correct = T)
+  wilcoxon.scPS[[repl]]$FDR<- p.adjust(wilcoxon.scPS[[repl]]$pvalue,method ="fdr" )
+  wilcoxon.scPS[[repl]]  <- wilcoxon.scPS[[repl]][which(wilcoxon.scPS[[repl]] $FDR < 0.05 ),]
+  geneset.scPS[[repl]] <- rownames(wilcoxon.scPS[[repl]])
+  
+  wilcoxon.ssGSEA[[repl]] <- row_wilcoxon_twosample(Group1.ssGSEA[[repl]], Group2.ssGSEA[[repl]], alternative = 'two.sided', exact =NA, correct = T)
+  wilcoxon.ssGSEA[[repl]]$FDR<- p.adjust(wilcoxon.ssGSEA[[repl]]$pvalue,method ="fdr" )
+  wilcoxon.ssGSEA[[repl]]   <- wilcoxon.ssGSEA[[repl]][which(wilcoxon.ssGSEA[[repl]] $FDR < 0.05 ),]
+  geneset.ssGSEA[[repl]]  <- rownames(wilcoxon.ssGSEA[[repl]])
+  
+  wilcoxon.AUCell[[repl]] <- row_wilcoxon_twosample(Group1.AUCell[[repl]], Group2.AUCell[[repl]], alternative = 'two.sided', exact =NA, correct = T)
+  wilcoxon.AUCell[[repl]]$FDR<-  p.adjust(wilcoxon.AUCell[[repl]]$pvalue,method ="fdr" )
+  wilcoxon.AUCell[[repl]]  <- wilcoxon.AUCell[[repl]][which(wilcoxon.AUCell[[repl]] $FDR < 0.05 ),]
+  geneset.AUCell[[repl]] <- rownames(wilcoxon.AUCell[[repl]])
+  
+  wilcoxon.JASMINE[[repl]] <- row_wilcoxon_twosample(Group1.JASMINE[[repl]], Group2.JASMINE[[repl]], alternative = 'two.sided', exact =NA, correct = T)
+  wilcoxon.JASMINE[[repl]]$FDR<- p.adjust(wilcoxon.JASMINE[[repl]]$pvalue,method ="fdr" )
+  wilcoxon.JASMINE[[repl]]  <- wilcoxon.JASMINE[[repl]][which(wilcoxon.JASMINE[[repl]] $FDR < 0.05 ),]
+  geneset.JASMINE[[repl]] <- rownames(wilcoxon.JASMINE[[repl]])
+
+  wilcoxon.UCell[[repl]] <- row_wilcoxon_twosample(Group1.UCell[[repl]], Group2.UCell[[repl]], alternative = 'two.sided', exact =NA, correct = T)
+  wilcoxon.UCell[[repl]]$FDR<- p.adjust(wilcoxon.UCell[[repl]]$pvalue,method ="fdr" )
+  wilcoxon.UCell[[repl]]  <- wilcoxon.UCell[[repl]][which(wilcoxon.UCell[[repl]] $FDR < 0.05 ),]
+  geneset.UCell[[repl]] <- rownames(wilcoxon.UCell[[repl]])
+  
+  wilcoxon.SCSE[[repl]] <- row_wilcoxon_twosample(Group1.SCSE[[repl]], Group2.SCSE[[repl]], alternative = 'two.sided', exact =NA, correct = T)
+  wilcoxon.SCSE[[repl]]$FDR<- p.adjust(wilcoxon.SCSE[[repl]]$pvalue,method ="fdr" )
+  wilcoxon.SCSE[[repl]]  <- wilcoxon.SCSE[[repl]][which(wilcoxon.SCSE[[repl]] $FDR < 0.05 ),]
+  geneset.SCSE[[repl]] <- rownames(wilcoxon.SCSE[[repl]])
+  
+  wilcoxon.AddModuleScore[[repl]] <- row_wilcoxon_twosample(Group1.AddModuleScore[[repl]], Group2.AddModuleScore[[repl]], 
+                                                            alternative = 'two.sided', exact =NA, correct = T)
+  wilcoxon.AddModuleScore[[repl]]$FDR<- p.adjust(wilcoxon.AddModuleScore[[repl]]$pvalue,method ="fdr" )
+  wilcoxon.AddModuleScore[[repl]]  <- wilcoxon.AddModuleScore[[repl]][which(wilcoxon.AddModuleScore[[repl]] $FDR < 0.05 ),]
+  geneset.AddModuleScore[[repl]] <- rownames(wilcoxon.AddModuleScore[[repl]])
+}
+
+## ----calulate--------------------------------------------------
+name <- c("GS_10_0_","GS_10_0.2_","GS_10_0.5_","GS_10_0.8_","GS_10_1_",
+          "GS_20_0_","GS_20_0.2_","GS_20_0.5_","GS_20_0.8_","GS_20_1_",
+          "GS_30_0_","GS_30_0.2_","GS_30_0.5_","GS_30_0.8_","GS_30_1_",
+          "GS_40_0_","GS_40_0.2_","GS_40_0.5_","GS_40_0.8_","GS_40_1_",
+          "GS_50_0_","GS_50_0.2_","GS_50_0.5_","GS_50_0.8_","GS_50_1_",
+          "GS_100_0_","GS_100_0.2_","GS_100_0.5_","GS_100_0.8_","GS_100_1_",
+          "GS_200_0_","GS_200_0.2_","GS_200_0.5_","GS_200_0.8_","GS_200_1_",
+          "GS_300_0_","GS_300_0.2_","GS_300_0.5_","GS_300_0.8_","GS_300_1_",
+          "GS_400_0_","GS_400_0.2_","GS_400_0.5_","GS_400_0.8_","GS_400_1_",
+          "GS_500_0_","GS_500_0.2_","GS_500_0.5_","GS_500_0.8_","GS_500_1_")
+
+name <- gsub("_","-",name)
+
+all_num <- mat.or.vec(nr = 7 ,nc = length(name))
+rownames(all_num) <- c('ssGSEA','JASMINE','AUCell','UCell','scPS','SCSE','AddModuleScore')
+colnames(all_num) <- name
+dat.list <- list()
+
+for (repl in 1:10){
+dat.list[[repl]] <- list(scPS=geneset.scPS[[repl]],
+                         UCell=geneset.UCell[[repl]],
+                         AUCell=geneset.AUCell[[repl]],                                                       
+                         JASMINE=geneset.JASMINE[[repl]],
+                         ssGSEA=geneset.ssGSEA[[repl]],
+                         SCSE=geneset.SCSE[[repl]],
+                         AddModuleScore=geneset.AddModuleScore[[repl]])}
+
+dat.sum <- data.frame()
+for (repl in 1:10){
+  for (i in rownames(all_num)){
+    for (j in 1:length(name)){
+      num <- length(dat.list[[repl]][[i]][str_detect(dat.list[[repl]][[i]],name[j])])
+      all_num[i,j] <- num
+    }
+  }
+  dat.sum <- rbind(dat.sum,all_num)
+}
+
+dat.sum.2 <- data.frame()
+for (i in name){
+    mat <- data.frame(count=dat.sum[,i], geneset = i, methods= rownames(dat.sum))
+    dat.sum.2 <- rbind(dat.sum.2,mat)
+}
+
+
+write.csv(dat.sum, "Two side dat matrix.csv")
+write.csv(dat.sum.2, "Two side dat matrix 2.csv")
+```

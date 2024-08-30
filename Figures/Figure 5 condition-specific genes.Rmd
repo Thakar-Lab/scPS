@@ -1,0 +1,312 @@
+---
+title: "R Figure 4"
+output: html_notebook
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r set-up,include=FALSE}
+library(ggplot2)
+library(dplyr)
+library(ggsci)
+library(scales)
+library(ComplexHeatmap)
+library(circlize)
+library(ggthemes)
+library(RColorBrewer)
+library(tidyverse)
+library(gghalves)
+
+
+rm(list = ls())
+
+mypal = brewer.pal(n = 9, name = "Pastel1")
+show_col(mypal)
+mycol <- c(mypal[2],mypal[1])
+names(mycol) <- c("Control","Treat")
+show_col(mycol)
+
+# color for the heatmap
+col_fun <- colorRampPalette(brewer.pal(9, "OrRd"))(50)
+col_fun[1] <- "white"
+display.brewer.pal(9,"OrRd")
+
+# set the color for each GSA method
+mypal = c("#A7CEE2","#428DBF","#F0E442","#E0271E","#EB8E47","#7A52A6","#C1A9D2")
+show_col(mypal)
+names(mypal) <- c("AddModuleScore","AUCell","JASMINE","scPS","SCSE","UCell","ssGSEA")
+# set the theme for ggplot2
+My_Theme <- theme(axis.ticks = element_blank(),
+                  legend.title=element_blank(),
+                  legend.position = "top", 
+                  legend.direction = "vertical", 
+                  legend.justification='center',
+                  plot.caption = element_text(hjust = 0.5, vjust = -1, size=14),
+                  panel.background = element_rect(fill = NA),
+                  panel.grid.major = element_line(colour = "#e6e6e6"),
+                  panel.ontop = F,
+                  panel.border = element_rect(color = "#333333", fill = NA, size = 1))
+```
+
+```{r heatmap scenario 3-4}
+#### real sim data ####
+load("/Volumes/BigU/scPS Manuscript/Scrip for NAR-Figure/rep1 sim.RData")
+Group = factor(rep(c("Control","Treat"),times = c(20,20)))
+Group = factor(Group,levels = c("Control","Treat"))
+exp <- as.matrix(Participant.integrated.1[["RNA"]]@data)
+rows_zeros = rowMeans(as.matrix(Participant.integrated.1[["RNA"]]@data) ==0)
+
+colour <- c(mypal[6],mypal[9],mypal[9])
+names(colour) <- c("GS","=","+")
+
+# Scenario 3 = New more gene in scenario 1
+Genes <- rownames(Participant.integrated.1@assays$RNA@data[rows_zeros < 1,])
+print(length(Genes))
+Signal <- rownames(Participant.integrated.1@assays$RNA@data[rows_zeros <= 0.75,])
+print(length(Signal))
+NonSignal <- Genes[-which(Genes %in% c(Signal)) ]
+print(length(NonSignal))
+
+set.seed(42)
+Signal_genes <- sample(Signal,10,replace = F)
+NonSignal_genes   <- sample(NonSignal,90,replace = F)
+Newed_genes <- sample(Signal[-which(Signal %in% c(Signal_genes))],5,replace = F)
+dat <- exp[c(Signal_genes,NonSignal_genes,Newed_genes),1:40]
+dat[Newed_genes, 1:20] <- dat[Newed_genes, 1:20] * 0
+
+
+Signal = factor(rep(c("1","2","3"),times = c(10,90,5)))
+Signal = factor(Signal,levels = c("1","2","3"))
+
+left_annotation = rowAnnotation(foo = anno_block(gp = gpar(fill = colour),
+                                                 labels = c("1","2","3"),
+                                                 labels_gp = gpar(col = 'black', fontsize = 8)))
+top_annotation = HeatmapAnnotation(
+  cluster = anno_block(gp = gpar(fill = mycol),
+                  labels = c("Control","Treat"),
+                       labels_gp = gpar(col = "white", fontsize = 10)))
+
+p1 <-  Heatmap(t(t(dat)),name = " ",
+             col = col_fun,
+             na_col = "white",
+             cluster_rows = F,
+             cluster_columns = F,
+             top_annotation = top_annotation,
+             left_annotation = left_annotation,
+             column_split = Group,
+             row_split = Signal,
+             border = T,
+             show_column_names = F,
+             show_row_names = F,
+             row_gap = unit(2, "mm"),
+             row_title= NULL,
+             column_title = "Scenario 3",
+             column_title_side = "bottom",
+             column_title_gp = gpar(fontsize = 14),
+             show_heatmap_legend = FALSE)
+
+p1
+# Scenario 4 = New more gene in scenario 2
+Genes <- rownames(Participant.integrated.1@assays$RNA@data[rows_zeros < 1,])
+print(length(Genes))
+set.seed(42)
+Signal_genes <- sample(Genes,10,replace = F)
+print(length(Signal_genes))
+NonSignal_genes <- sample(Genes[-which(Genes %in% c(Signal_genes)) ],90,replace = F)
+print(length(NonSignal_genes))
+Newed_genes <- sample( NonSignal[-which(NonSignal %in% c(NonSignal_genes))],5,replace = F)
+dat <- exp[c(Signal_genes,NonSignal_genes,Newed_genes),1:40]
+dat[Newed_genes, 1:20] <- dat[Newed_genes, 1:20] * 0
+Signal = factor(rep(c("1","2","3"),times = c(10,90,5)))
+Signal = factor(Signal,levels = c("1","2","3"))
+
+left_annotation = rowAnnotation(foo = anno_block(gp = gpar(fill = colour),
+                                                 labels = c("1","2","3"),
+                                                 labels_gp = gpar(col = 'black', fontsize = 8)))
+
+p2 <- Heatmap(t(t(dat)),name = " ",
+             col = col_fun,
+             na_col = "white",
+             cluster_rows = F,
+             cluster_columns = F,
+             top_annotation = top_annotation,
+             left_annotation = left_annotation,
+             column_split = Group,
+             row_split = Signal,
+             border = T,
+             show_column_names = F,
+             show_row_names = F,
+             row_gap = unit(2, "mm"),
+             row_title= NULL,
+             column_title = "Scenario 4",
+             column_title_side = "bottom",
+             column_title_gp = gpar(fontsize = 14),
+             show_heatmap_legend = FALSE)
+
+p1+p2
+```
+
+# condition specific genes level boxplot
+splatter scenario 5 without signal
+p.splatter.555
+```{r}
+# scenario 3 sample size = 200
+setwd("/Users/rwang4/Library/CloudStorage/Box-Box/Ruoqiao Thakar Lab/Single-cell Pathway Score (scPS)/Data & results/SSD")
+dat1 <- read.csv("Sample size 200/Scenario 3/Two side dat matrix 2.csv",header = T,row.names = 1)
+Methods <- c("ssGSEA","JASMINE","AUCell","UCell","scPS","SCSE","AddModuleScore")
+dat1$Methods <- rep(Methods,dim(dat1)[1]/7)
+dat1$cells <- 200
+dat1$Scenario <- "Scenario 3"
+dat1$Noise <- rep(rep(c("0","20","50","80","100"), each=dim(dat1)[1]/50),10)
+dat1 <- dat1[grep("GS-100-",dat1$geneset),]
+dat1$Methods <- factor(dat1$Methods, levels=c("AddModuleScore","AUCell","JASMINE","scPS","SCSE","UCell","ssGSEA"))
+
+# put name into the facet labels
+noise_names <- as_labeller(c(`0` = "w/o. condition-specific genes", `100` = "w/. condition-specific genes"))
+
+p.splatter.555 <- dat1 %>% 
+  filter(Noise %in% c(0,100)) %>%
+  ggplot(aes(x=Methods,y=count, color=Methods)) +
+  geom_boxplot() +
+  geom_jitter(width=0.1,alpha=0.8) +
+  facet_wrap(~Noise,ncol = 2,labeller = noise_names) +
+  scale_color_manual(values = mypal)+
+  scale_y_continuous(breaks = c(0, 20, 40, 60, 80, 100),limits = c(-15,115))+ 
+    labs(x="", y = "Recovery rate (%)") +
+    theme_bw()+
+    My_Theme+
+    theme(axis.text.x = element_blank(),
+        strip.text = element_text(size = rel(1)),
+    strip.background = element_rect(fill = "white", colour = "black", size = 1))+  guides(color=guide_legend(nrow=1)) 
+
+p.splatter.555
+```
+
+RWSD scenario 5 without signal
+p.rwsd.555
+```{r}
+# scenario 3 sample size = 200
+setwd("/Users/rwang4/Library/CloudStorage/Box-Box/Ruoqiao Thakar Lab/Single-cell Pathway Score (scPS)/Data & results/RWSD")
+dat1 <- read.csv("Sample size 200/Scenario 3/Two side dat matrix 2.csv",header = T,row.names = 1)
+Methods <- c("ssGSEA","JASMINE","AUCell","UCell","scPS","SCSE","AddModuleScore")
+dat1$Methods <- rep(Methods,dim(dat1)[1]/7)
+dat1$cells <- 200
+dat1$Scenario <- "Scenario 3"
+dat1$Noise <- rep(rep(c("0","20","50","80","100"), each=dim(dat1)[1]/50),10)
+dat1 <- dat1[grep("GS-100-",dat1$geneset),]
+dat1$Methods <- factor(dat1$Methods, levels=c("AddModuleScore","AUCell","JASMINE","scPS","SCSE","UCell","ssGSEA"))
+
+# put name into the facet labels
+noise_names <- as_labeller(c(`0` = "w/o. condition-specific genes", `100` = "w/. condition-specific genes"))
+  
+p.rwsd.555 <- dat1 %>% 
+  filter(Noise %in% c(0,100)) %>%
+  ggplot(aes(x=Methods,y=count, color=Methods)) +
+  geom_boxplot() +
+  geom_jitter(width=0.1,alpha=0.8) +
+  facet_wrap(~Noise,ncol = 2,labeller = noise_names) +
+  scale_color_manual(values = mypal)+
+  scale_y_continuous(breaks = c(0, 20, 40, 60, 80, 100),limits = c(-15,115))+ 
+    labs(x="", y = "Recovery rate (%)") +
+    theme_bw()+
+    My_Theme+
+    theme(axis.text.x = element_blank(),
+        strip.text = element_text(size = rel(1)),
+    strip.background = element_rect(fill = "white", colour = "black", size = 1))+  guides(color=guide_legend(nrow=1)) 
+
+p.rwsd.555
+```
+
+splatter scenario 6 without signal
+p.splatter.666
+```{r}
+# scenario 4 sample size = 200
+setwd("/Users/rwang4/Library/CloudStorage/Box-Box/Ruoqiao Thakar Lab/Single-cell Pathway Score (scPS)/Data & results/SSD/")
+dat1 <- read.csv("Sample size 200/Scenario 4/Two side dat matrix 2.csv",header = T,row.names = 1)
+Methods <- c("ssGSEA","JASMINE","AUCell","UCell","scPS","SCSE","AddModuleScore")
+dat1$Methods <- rep(Methods,dim(dat1)[1]/7)
+dat1$cells <- 200
+dat1$Scenario <- "Scenario 4"
+dat1$Noise <- rep(rep(c("0","20","50","80","100"), each=dim(dat1)[1]/50),10)
+dat1 <- dat1[grep("GS-100-",dat1$geneset),]
+dat1$Methods <- factor(dat1$Methods, levels=c("AddModuleScore","AUCell","JASMINE","scPS","SCSE","UCell","ssGSEA"))
+
+# put name into the facet labels
+noise_names <- as_labeller(c(`0` = "w/o. condition-specific genes", `100` = "w/. condition-specific genes"))
+
+
+p.splatter.666 <- dat1 %>% 
+  filter(Noise %in% c(0,100)) %>%
+  ggplot(aes(x=Methods,y=count, color=Methods)) +
+  geom_boxplot() +
+  geom_jitter(width=0.1,alpha=0.8) +
+  facet_wrap(~Noise,ncol = 2,labeller = noise_names) +
+  scale_color_manual(values = mypal)+
+  scale_y_continuous(breaks = c(0, 20, 40, 60, 80, 100),limits = c(-15,115))+ 
+    labs(x="", y = "Recovery rate (%)") +
+    theme_bw()+
+    My_Theme+
+    theme(axis.text.x = element_blank(),
+        strip.text = element_text(size = rel(1)),
+    strip.background = element_rect(fill = "white", colour = "black", size = 1))+  guides(color=guide_legend(nrow=1)) 
+p.splatter.666
+
+```
+
+RWSD scenario 6 without signal
+p.rwsd.666
+```{r}
+# scenario 3 sample size = 200
+setwd("/Users/rwang4/Library/CloudStorage/Box-Box/Ruoqiao Thakar Lab/Single-cell Pathway Score (scPS)/Data & results/RWSD")
+dat1 <- read.csv("Sample size 200/Scenario 4/Two side dat matrix 2.csv",header = T,row.names = 1)
+Methods <- c("ssGSEA","JASMINE","AUCell","UCell","scPS","SCSE","AddModuleScore")
+dat1$Methods <- rep(Methods,dim(dat1)[1]/7)
+dat1$cells <- 200
+dat1$Scenario <- "Scenario 4"
+dat1$Noise <- rep(rep(c("0","20","50","80","100"), each=dim(dat1)[1]/50),10)
+dat1 <- dat1[grep("GS-100-",dat1$geneset),]
+dat1$Methods <- factor(dat1$Methods, levels=c("AddModuleScore","AUCell","JASMINE","scPS","SCSE","UCell","ssGSEA"))
+
+# put name into the facet labels
+noise_names <- as_labeller(c(`0` = "w/o. condition-specific genes", `100` = "w/. condition-specific genes"))
+
+
+p.rwsd.666 <- dat1 %>% 
+  filter(Noise %in% c(0,100)) %>%
+  ggplot(aes(x=Methods,y=count, color=Methods)) +
+  geom_boxplot() +
+  geom_jitter(width=0.1,alpha=0.8) +
+  facet_wrap(~Noise,ncol = 2,labeller = noise_names) +
+  scale_color_manual(values = mypal)+
+  scale_y_continuous(breaks = c(0, 20, 40, 60, 80, 100),limits = c(-15,115))+ 
+    labs(x="", y = "Recovery rate (%)") +
+    theme_bw()+
+    My_Theme+
+    theme(axis.text.x = element_blank(),
+        strip.text = element_text(size = rel(1)),
+    strip.background = element_rect(fill = "white", colour = "black", size = 1))+  guides(color=guide_legend(nrow=1)) 
+
+
+p.rwsd.666
+```
+
+save 7x10.5inches
+```{r}
+library(ggpubr)
+p <- ggarrange(p.splatter.555,p.splatter.666,
+               p.rwsd.555,p.rwsd.666,
+          nrow =2,
+          ncol =2,
+          align='h', 
+          legend = "top",
+          labels = c("A","B","C","D"),
+          common.legend = T)
+
+p
+
+pdf('/Users/rwang4/Desktop/Effect of Newy added gene scenario 3&4.pdf', width = 10, height = 8)
+p
+dev.off()
+
+```
+

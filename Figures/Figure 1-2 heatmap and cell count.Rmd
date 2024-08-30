@@ -1,0 +1,394 @@
+---
+title: "R Figure 1"
+output: html_notebook
+editor_options: 
+  chunk_output_type: console
+---
+
+# set-up
+```{r,include=FALSE}
+setwd('/Users/rwang4/Library/CloudStorage/Box-Box/Ruoqiao Thakar Lab/Single-cell Pathway Score (scPS)')
+library(ggplot2)
+library(dplyr)
+library(ggsci)
+library(scales)
+library(ComplexHeatmap)
+library(circlize)
+library(RColorBrewer)
+library(ggthemes)
+rm(list = ls())
+
+mypal = brewer.pal(n = 9, name = "Pastel1")
+show_col(mypal)
+
+mycol <- c(mypal[2],mypal[1])
+names(mycol) <- c("Control","Treat")
+show_col(mycol)
+
+colour <- c(mypal[6],"white")
+show_col(colour)
+names(colour) <- c("Signals","Non-signals")
+
+# color for the heatmap
+col_fun <- colorRampPalette(brewer.pal(9, "OrRd"))(50)
+col_fun[1] <- "white"
+display.brewer.pal(9,"OrRd")
+
+# set the color for each GSA method
+mypal = c("#A7CEE2","#428DBF","#F0E442","#E0271E","#EB8E47","#7A52A6","#C1A9D2")
+show_col(mypal)
+names(mypal) <- c("AddModuleScore","AUCell","JASMINE","scPS","SCSE","UCell","ssGSEA")
+
+# set the theme for ggplot2
+My_Theme <- theme(axis.ticks = element_blank(),
+                  legend.title=element_blank(),
+                  legend.position = "top", 
+                  legend.direction = "vertical", 
+                  legend.justification='center',
+                  plot.caption = element_text(hjust = 0.5, vjust = -1, size=14),
+                  panel.background = element_rect(fill = NA),
+                  panel.grid.major = element_line(colour = "#e6e6e6"),
+                  panel.ontop = F,
+                  panel.border = element_rect(color = "#333333", fill = NA, size = 1))
+```
+# heatmap scenario 1-2 save 7x6inches-,landscape
+```{r heatmap,echo=FALSE}
+#### real sim data ####
+load("/Volumes/BigU/scPS Manuscript/Scrip for NAR-Figure/rep1 sim.RData")
+Group = factor(rep(c("Control","Treat"),times = c(20,20)))
+Group = factor(Group,levels = c("Control","Treat"))
+exp <- as.matrix(Participant.integrated.1[["RNA"]]@data)
+rows_zeros = rowMeans(as.matrix(Participant.integrated.1[["RNA"]]@data) ==0)
+
+# Scenario 1 = remove all undetected genes and signals from threshold < 0.75
+Genes <- rownames(Participant.integrated.1@assays$RNA@data[rows_zeros < 1,])
+print(length(Genes))
+Signal <- rownames(Participant.integrated.1@assays$RNA@data[rows_zeros <= 0.75,])
+print(length(Signal))
+NonSignal <- Genes[-which(Genes %in% c(Signal)) ]
+print(length(NonSignal))
+
+set.seed(42)
+Signal_genes <- sample(Signal,10,replace = F)
+NonSignal_genes   <- sample(NonSignal,90,replace = F)
+dat <- exp[c(Signal_genes,NonSignal_genes),1:40]
+dat[Signal_genes, 21:40] <- dat[Signal_genes, 21:40]  * 3
+
+Signal = factor(rep(c("Signals","Non-signals"),times = c(10,90)))
+Signal = factor(Signal,levels = c("Signals","Non-signals"))
+
+left_annotation = rowAnnotation(foo = anno_block(gp = gpar(fill = colour),
+                                                 labels = c("Signals","Non-signals"),
+                                                 labels_gp = gpar(col = 'black', fontsize = 10)))
+top_annotation = HeatmapAnnotation(
+  cluster = anno_block(gp = gpar(fill = mycol),
+                  labels = c("Control","Treat"),
+                       labels_gp = gpar(col = "white", fontsize = 10)))
+
+p1 <- Heatmap(t(t(dat)),name = " ",
+             col = col_fun,
+             na_col = "white",
+             cluster_rows = F,
+             cluster_columns = F,
+             top_annotation = top_annotation,
+             left_annotation = left_annotation,
+             column_split = Group,
+             row_split = Signal,
+             border = T,
+             show_column_names = F,
+             show_row_names = F,
+             row_gap = unit(2, "mm"),
+             row_title= NULL,
+             column_title = "Scenario 1",
+             column_title_side = "bottom",
+             column_title_gp = gpar(fontsize = 14),
+             show_heatmap_legend = FALSE)
+
+p1
+
+# Scenario 2 = remove all undetected genes and randomly select 550 signal genes
+Genes <- rownames(Participant.integrated.1@assays$RNA@data[rows_zeros < 1,])
+print(length(Genes))
+set.seed(42)
+Signal_genes <- sample(Genes,10,replace = F)
+print(length(Signal_genes))
+NonSignal_genes <- sample(Genes[-which(Genes %in% c(Signal_genes)) ],90,replace = F)
+print(length(NonSignal_genes))
+
+dat <- exp[c(Signal_genes,NonSignal_genes),1:40]
+dat[Signal_genes, 21:40] <- dat[Signal_genes, 21:40]  * 3
+
+Signal = factor(rep(c("Signals","Non-signals"),times = c(10,90)))
+Signal = factor(Signal,levels = c("Signals","Non-signals"))
+left_annotation = rowAnnotation(foo = anno_block(gp = gpar(fill = colour),
+                                                 labels = c("Signals","Non-signals"),
+                                                 labels_gp = gpar(col = "black", fontsize = 10)))
+
+p2 <- Heatmap(t(t(dat)),name = " ",
+             col = col_fun,
+             na_col = "white",
+             cluster_rows = F,
+             cluster_columns = F,
+             top_annotation = top_annotation,
+             left_annotation = left_annotation,
+             column_split = Group,
+             row_split = Signal,
+             border = T,
+             show_column_names = F,
+             show_row_names = F,
+             row_gap = unit(2, "mm"),
+             row_title= NULL,
+             column_title = "Scenario 2",
+             column_title_side = "bottom",
+             column_title_gp = gpar(fontsize = 14),
+             show_heatmap_legend = FALSE)
+
+p1+p2
+# save pdf A4
+```
+# cell count effect
+splatter scenario 1
+```{r}
+setwd("/Users/rwang4/Library/CloudStorage/Box-Box/Ruoqiao Thakar Lab/Single-cell Pathway Score (scPS)/Data & results/SSD/")
+# scenario 1
+# # sample size = 20
+dat1 <- read.csv("Sample size 20/Scenario 1/Two side dat matrix 2.csv",header = T,row.names = 1)
+# # sample size = 50
+dat2 <- read.csv("Sample size 50/Scenario 1/Two side dat matrix 2.csv",header = T,row.names = 1)
+# # sample size = 200
+dat3 <- read.csv("Sample size 200/Scenario 1/Two side dat matrix 2.csv",header = T,row.names = 1)
+# # sample size = 500
+dat4 <- read.csv("Sample size 500/Scenario 1/Two side dat matrix 2.csv",header = T,row.names = 1)
+
+# load all data in different cell counts and threshold
+Methods <- c("ssGSEA","JASMINE","AUCell","UCell","scPS","SCSE","AddModuleScore")
+object_names <- paste0("dat",1:4,seq="")
+data <- list()
+cell_number <- c(20,50,200,500)
+for (i in 1:length(object_names)) {
+  data[[i]] <- get(object_names[i])
+  data[[i]]$Methods <- rep(Methods,dim(data[[i]])[1]/7)
+  data[[i]]$object_name <- object_names[i]
+  data[[i]]$cells <- cell_number[i]
+  data[[i]]$Scenario <- "Scenario 1"
+}
+
+# get mean & standard deviation by method
+data_msd <- list()
+for (i in 1:length(object_names)) {
+    data_msd[[i]] <- data[[i]] %>% group_by(Methods, geneset, cells) %>% summarise_at(vars(count),list(mean = mean,sd = sd)) %>% as.data.frame()
+}
+
+# gene set size = 100, noise level = 0%
+data_msd.2 <- data.frame()
+for (i in 1:length(object_names)) {
+  data_msd.1 <- data_msd[[i]][data_msd[[i]]$geneset=="GS-100-0-",]
+  data_msd.2 <- rbind(data_msd.2,data_msd.1)
+}
+data_msd.2$cells <- as.factor(data_msd.2$cells)
+data_msd.2$Methods <- factor(data_msd.2$Methods, levels=c("AddModuleScore","AUCell","JASMINE","scPS","SCSE","UCell","ssGSEA"))
+
+# lineplot
+min(data_msd.2$mean-data_msd.2$sd)
+p.splatter.1 <- ggplot(data = data_msd.2) +
+  geom_line(aes(x=cells, y=mean, linetype = Methods, group=Methods, color=Methods), size=1, alpha=0.8) +
+  geom_point(aes(x=cells, y=mean,color=Methods),size=2, alpha=0.8) +
+  scale_fill_manual(values = mypal)+
+  scale_color_manual(values = mypal)+
+  geom_errorbar(aes(x=cells, y=mean,ymin=mean-sd, ymax=mean+sd, color=Methods), width=0.3, size=1, alpha=0.8, position=position_dodge(0.001))+
+  scale_y_continuous(breaks = c(0, 20, 40, 60, 80, 100),limits = c(-22,120))+ 
+  labs(x="Cell count", y = "Recovery rate (%)") +
+  My_Theme +  guides(color=guide_legend(nrow=1)) 
+ 
+p.splatter.1
+
+# dat$sd <- round(dat$sd,1)
+# dat$mean <- round(dat$mean,1)
+data_msd.2[grep("GS-100-0-",data_msd.2$geneset),]
+```
+splatter scenario 2
+```{r}
+setwd("/Users/rwang4/Library/CloudStorage/Box-Box/Ruoqiao Thakar Lab/Single-cell Pathway Score (scPS)/Data & results/SSD/")
+# scenario 2
+# # sample size = 20
+dat1 <- read.csv("Sample size 20/Scenario 2/Two side dat matrix 2.csv",header = T,row.names = 1)
+# # sample size = 50
+dat2 <- read.csv("Sample size 50/Scenario 2/Two side dat matrix 2.csv",header = T,row.names = 1)
+# # sample size = 200
+dat3 <- read.csv("Sample size 200/Scenario 2/Two side dat matrix 2.csv",header = T,row.names = 1)
+# # sample size = 500
+dat4 <- read.csv("Sample size 500/Scenario 2/Two side dat matrix 2.csv",header = T,row.names = 1)
+
+# load all data in different cell counts and threshold
+Methods <- c("ssGSEA","JASMINE","AUCell","UCell","scPS","SCSE","AddModuleScore")
+object_names <- paste0("dat",1:4,seq="")
+data <- list()
+cell_number <- c(20,50,200,500)
+for (i in 1:length(object_names)) {
+  data[[i]] <- get(object_names[i])
+  data[[i]]$Methods <- rep(Methods,dim(data[[i]])[1]/7)
+  data[[i]]$object_name <- object_names[i]
+  data[[i]]$cells <- cell_number[i]
+  data[[i]]$Scenario <- "Scenario 2"
+}
+
+# get mean & standard deviation by method
+data_msd <- list()
+for (i in 1:length(object_names)) {
+    data_msd[[i]] <- data[[i]] %>% group_by(Methods, geneset, cells) %>% summarise_at(vars(count),list(mean = mean,sd = sd)) %>% as.data.frame()
+}
+
+# gene set size = 100, noise level = 0%
+data_msd.2 <- data.frame()
+for (i in 1:length(object_names)) {
+  data_msd.1 <- data_msd[[i]][data_msd[[i]]$geneset=="GS-100-0-",]
+  data_msd.2 <- rbind(data_msd.2,data_msd.1)
+}
+data_msd.2$cells <- as.factor(data_msd.2$cells)
+data_msd.2$Methods <- factor(data_msd.2$Methods, levels=c("AddModuleScore","AUCell","JASMINE","scPS","SCSE","UCell","ssGSEA"))
+
+# lineplot
+min(data_msd.2$mean-data_msd.2$sd)
+p.splatter.2 <- ggplot(data = data_msd.2) +
+  geom_line(aes(x=cells, y=mean, linetype = Methods, group=Methods, color=Methods), size=1, alpha=0.8) +
+  geom_point(aes(x=cells, y=mean,color=Methods),size=2, alpha=0.8) +
+  scale_fill_manual(values = mypal)+
+  scale_color_manual(values = mypal)+
+  geom_errorbar(aes(x=cells, y=mean,ymin=mean-sd, ymax=mean+sd, color=Methods), width=0.3, size=1, alpha=0.8, position=position_dodge(0.001))+
+  scale_y_continuous(breaks = c(0, 20, 40, 60, 80, 100),limits = c(-22,120))+ 
+  labs(x="Cell count", y = "Recovery rate (%)") +
+  My_Theme +  guides(color=guide_legend(nrow=1)) 
+ 
+
+p.splatter.2
+```
+RWSD scenario 1
+```{r}
+setwd("/Users/rwang4/Library/CloudStorage/Box-Box/Ruoqiao Thakar Lab/Single-cell Pathway Score (scPS)/Data & results/RWSD/")
+# scenario 1
+# # sample size = 20
+dat1 <- read.csv("Sample size 20/Scenario 1/Two side dat matrix 2.csv",header = T,row.names = 1)
+# # sample size = 50
+dat2 <- read.csv("Sample size 50/Scenario 1/Two side dat matrix 2.csv",header = T,row.names = 1)
+# # sample size = 200
+dat3 <- read.csv("Sample size 200/Scenario 1/Two side dat matrix 2.csv",header = T,row.names = 1)
+# # sample size = 500
+dat4 <- read.csv("Sample size 500/Scenario 1/Two side dat matrix 2.csv",header = T,row.names = 1)
+
+# load all data in different cell counts and threshold
+Methods <- c("ssGSEA","JASMINE","AUCell","UCell","scPS","SCSE","AddModuleScore")
+object_names <- paste0("dat",1:4,seq="")
+data <- list()
+cell_number <- c(20,50,200,500)
+for (i in 1:length(object_names)) {
+  data[[i]] <- get(object_names[i])
+  data[[i]]$Methods <- rep(Methods,dim(data[[i]])[1]/7)
+  data[[i]]$object_name <- object_names[i]
+  data[[i]]$cells <- cell_number[i]
+  data[[i]]$Scenario <- "Scenario 1"
+}
+
+# get mean & standard deviation by method
+data_msd <- list()
+for (i in 1:length(object_names)) {
+    data_msd[[i]] <- data[[i]] %>% group_by(Methods, geneset, cells) %>% summarise_at(vars(count),list(mean = mean,sd = sd)) %>% as.data.frame()
+}
+
+# gene set size = 100, noise level = 0%
+data_msd.2 <- data.frame()
+for (i in 1:length(object_names)) {
+  data_msd.1 <- data_msd[[i]][data_msd[[i]]$geneset=="GS-100-0-",]
+  data_msd.2 <- rbind(data_msd.2,data_msd.1)
+}
+data_msd.2$cells <- as.factor(data_msd.2$cells)
+data_msd.2$Methods <- factor(data_msd.2$Methods, levels=c("AddModuleScore","AUCell","JASMINE","scPS","SCSE","UCell","ssGSEA"))
+
+# lineplot
+min(data_msd.2$mean-data_msd.2$sd)
+p.rwsd.1 <- ggplot(data = data_msd.2) +
+  geom_line(aes(x=cells, y=mean, linetype = Methods, group=Methods, color=Methods), size=1, alpha=0.8) +
+  geom_point(aes(x=cells, y=mean,color=Methods),size=2, alpha=0.8) +
+  scale_fill_manual(values = mypal)+
+  scale_color_manual(values = mypal)+
+  geom_errorbar(aes(x=cells, y=mean,ymin=mean-sd, ymax=mean+sd, color=Methods), width=0.3, size=1, alpha=0.8, position=position_dodge(0.001))+
+  scale_y_continuous(breaks = c(0, 20, 40, 60, 80, 100),limits = c(-22,120))+ 
+  labs(x="Cell count", y = "Recovery rate (%)") +
+  My_Theme +  guides(color=guide_legend(nrow=1)) 
+ 
+ 
+p.rwsd.1
+```
+RWSD scenario 2
+```{r}
+setwd("/Users/rwang4/Library/CloudStorage/Box-Box/Ruoqiao Thakar Lab/Single-cell Pathway Score (scPS)/Data & results/RWSD/")
+# scenario 2
+# # sample size = 20
+dat1 <- read.csv("Sample size 20/Scenario 2/Two side dat matrix 2.csv",header = T,row.names = 1)
+# # sample size = 50
+dat2 <- read.csv("Sample size 50/Scenario 2/Two side dat matrix 2.csv",header = T,row.names = 1)
+# # sample size = 200
+dat3 <- read.csv("Sample size 200/Scenario 2/Two side dat matrix 2.csv",header = T,row.names = 1)
+# # sample size = 500
+dat4 <- read.csv("Sample size 500/Scenario 2/Two side dat matrix 2.csv",header = T,row.names = 1)
+
+# load all data in different cell counts and threshold
+Methods <- c("ssGSEA","JASMINE","AUCell","UCell","scPS","SCSE","AddModuleScore")
+object_names <- paste0("dat",1:4,seq="")
+data <- list()
+cell_number <- c(20,50,200,500)
+for (i in 1:length(object_names)) {
+  data[[i]] <- get(object_names[i])
+  data[[i]]$Methods <- rep(Methods,dim(data[[i]])[1]/7)
+  data[[i]]$object_name <- object_names[i]
+  data[[i]]$cells <- cell_number[i]
+  data[[i]]$Scenario <- "Scenario 2"
+}
+
+# get mean & standard deviation by method
+data_msd <- list()
+for (i in 1:length(object_names)) {
+    data_msd[[i]] <- data[[i]] %>% group_by(Methods, geneset, cells) %>% summarise_at(vars(count),list(mean = mean,sd = sd)) %>% as.data.frame()
+}
+
+# gene set size = 100, noise level = 0%
+data_msd.2 <- data.frame()
+for (i in 1:length(object_names)) {
+  data_msd.1 <- data_msd[[i]][data_msd[[i]]$geneset=="GS-100-0-",]
+  data_msd.2 <- rbind(data_msd.2,data_msd.1)
+}
+data_msd.2$cells <- as.factor(data_msd.2$cells)
+data_msd.2$Methods <- factor(data_msd.2$Methods, levels=c("AddModuleScore","AUCell","JASMINE","scPS","SCSE","UCell","ssGSEA"))
+
+# lineplot
+min(data_msd.2$mean-data_msd.2$sd)
+p.rwsd.2 <-ggplot(data = data_msd.2) +
+  geom_line(aes(x=cells, y=mean, linetype = Methods, group=Methods, color=Methods), size=1, alpha=0.8) +
+  geom_point(aes(x=cells, y=mean,color=Methods),size=2, alpha=0.8) +
+  scale_fill_manual(values = mypal)+
+  scale_color_manual(values = mypal)+
+  geom_errorbar(aes(x=cells, y=mean,ymin=mean-sd, ymax=mean+sd, color=Methods), width=0.3, size=1, alpha=0.8, position=position_dodge(0.001))+
+  scale_y_continuous(breaks = c(0, 20, 40, 60, 80, 100),limits = c(-22,120))+ 
+  labs(x="Cell count", y = "Recovery rate (%)") +
+  My_Theme +  guides(color=guide_legend(nrow=1)) 
+ 
+
+p.rwsd.2
+```
+
+plot all save 7x6inches
+```{r}
+library(ggpubr)
+p<-ggarrange(p.splatter.1,p.splatter.2,
+          p.rwsd.1, p.rwsd.2,
+          nrow =2,
+          ncol =2,
+          align='h', 
+          labels = c("A","B","C","D"),
+          legend = "top",
+          common.legend = T)
+p
+pdf('/Users/rwang4/Desktop/Effect of cell count scenario 1&2.pdf', width = 10, height = 8)
+p
+dev.off()
+# save pdf A4
+```

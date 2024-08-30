@@ -1,0 +1,531 @@
+---
+title: "Real-world simulated data(RWSD) scRNAseq datasets and gene signature simulation"
+output: 
+  html_notebook: 
+    code_folding: hide
+    theme: readable
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r set-up, include=FALSE}
+# knitr::opts_chunk$set(echo = TRUE, autodep=TRUE, message=FALSE, warning=FALSE)
+library(Seurat)
+rm(list=ls())
+gc()
+```
+
+```{r scimpute data}
+File_dir = "/gpfs/fs2/scratch/rwang46/Single Cell Pathway Score_scPS/Job 1 Simulation/Script/"
+setwd(File_dir)
+Normal_Bcell.data <- read.csv("./Scenario 2 scimpute count data/scimpute_count.csv",header = T, row.names = 1)
+Normal_Bcell <- CreateSeuratObject(counts = Normal_Bcell.data, project = "scimpute", min.cells = 3, min.features = 200)
+Normal_Bcell <- NormalizeData(Normal_Bcell, normalization.method = "LogNormalize", scale.factor = 10000)
+save(Normal_Bcell,file = "Naive Normal B cell_scimpute.RData")
+load("/gpfs/fs2/scratch/rwang46/Single Cell Pathway Score_scPS/Job 1 Simulation/Script/Naive Normal B cell_scimpute.RData")
+```
+
+```{r real-world simulated data (RWSD), cellcount, threshold, signal level}
+load("/gpfs/fs2/scratch/rwang46/Single Cell Pathway Score_scPS/Job 1 Simulation/Script/Naive Normal B cell.RData")
+DefaultAssay(Normal_Bcell) <- "RNA"
+# DimPlot(Normal_Bcell, reduction = "pca")
+# Idents(Normal_Bcell) <- "annotation"
+# table(Idents(Normal_Bcell))
+# Idents(Normal_Bcell) <- "Group"
+# table(Idents(Normal_Bcell))
+# save(Normal_Bcell,file = "./Naive Normal B cell.RData")
+```
+
+
+```{r file}
+File_dir = "/gpfs/fs2/scratch/rwang46/Single Cell Pathway Score_scPS/Job 1 Simulation/Practical/Sample size 200"
+dir.create(File_dir)
+# set the parameters
+cellcounts = 200 #sample size for each condition
+Threshold = 0.75
+Signal_Level = 1.2
+set.seed(42)
+sim.mc <- replicate(11, {X <- sample(1:length(colnames(Normal_Bcell)),(2*cellcounts),replace=F)})
+```
+
+Scenario 1: 
+Remove undetected genes
+Select Densely expressed genes, and ddd signal to these genes in condition 2
+Signal is 100% from densely expressed genes,and Non-signal is from the remaining genes
+GS size 10-500 and Sample size 20,50,200,500
+```{r RWSD Scenario 1}
+setwd(File_dir)
+File_dir
+#Scenario_set = "Scenario 1 without signal"
+Scenario_set = "Scenario 1 scimpute"
+dir.create(Scenario_set)
+file_dir = paste0(File_dir,"/",Scenario_set)
+Genes <- list()
+Signal <- list()
+NonSignal <- list()
+Undetect <- list()
+rows_zeros.signal <- list()
+rows_zeros.nonsignal <- list()
+p_DimPlot<-list()
+
+for (repl in 1:10){
+  B_cell_subset <- Normal_Bcell[,colnames(Normal_Bcell)[sim.mc[,repl]]]
+  rownames(B_cell_subset@assays$RNA@data) <- paste0("gene",rep(1:dim(B_cell_subset)[1]))
+  B_cell_subset_meta_data <- data.frame(Condition=c(rep("Condition_1",cellcounts),rep("Condition_2",cellcounts))) # add condition meta
+  set.seed(42)
+  condition_1 <-sample(colnames(B_cell_subset),cellcounts,replace = F)
+  condition_2 <- setdiff(rownames(B_cell_subset@meta.data),condition_1)
+  rownames(B_cell_subset_meta_data) <- c(condition_1,condition_2)
+  B_cell_subset <- AddMetaData(B_cell_subset,metadata = B_cell_subset_meta_data)
+  Idents(B_cell_subset) <- 'Condition'
+  print(table(Idents(B_cell_subset)))
+  #p <- DimPlot(B_cell_subset, reduction = "pca")
+  
+  ## ----Gene signature simulation--------------------------------------------------
+  rows_zeros = rowMeans(B_cell_subset@assays$RNA@data ==0)
+  # Scenario 1 select genes detected in at least one cell
+  Genes[[repl]] <- rownames(B_cell_subset@assays$RNA@data[rows_zeros < 1,])
+  print(paste("Detected gene count",length(Genes[[repl]])))
+  Undetect[[repl]] <- rownames(B_cell_subset@assays$RNA@data[rows_zeros == 1,])
+  print(paste("Undetect gene count",length(Undetect[[repl]])))
+
+  # Assign signal
+  Signal[[repl]] <- rownames(B_cell_subset@assays$RNA@data[rows_zeros < Threshold,])
+  print(paste("Signal gene count",length(Signal[[repl]])))
+  NonSignal[[repl]] <- Genes[[repl]][-which(Genes[[repl]] %in% Signal[[repl]]) ]
+  print(paste("Non singal gene count",length(NonSignal[[repl]])))
+  
+  dat <- as.matrix(B_cell_subset@assays$RNA@data)
+  dat <- dat[rownames(dat) %in% Genes[[repl]],]
+  print(dim(dat))
+  dat[Signal[[repl]], which(B_cell_subset@meta.data$Condition %in% "Condition_2")] <- dat[Signal[[repl]], which(B_cell_subset@meta.data$Condition %in% "Condition_2")] * Signal_Level
+
+  # Create Seurat Object
+  Participant.integrated.1 <- CreateSeuratObject(counts = dat, project = "Scenario 2")
+  rows_zeros = rowMeans(Participant.integrated.1@assays$RNA@counts ==0)
+  names(rows_zeros) <- rownames(Participant.integrated.1)
+  rows_zeros.signal[[repl]] <- rows_zeros[Signal[[repl]]]
+  rows_zeros.nonsignal[[repl]] <- rows_zeros[NonSignal[[repl]]]
+  
+  Participant.integrated.1 <- ScaleData(Participant.integrated.1,verbose = F)
+  # Add condition meta
+  Participant.integrated.1 <- AddMetaData(Participant.integrated.1,metadata = B_cell_subset@meta.data$Condition ,col.name = 'Condition')
+  Idents(Participant.integrated.1) <- 'Condition'
+  table(Idents(Participant.integrated.1))
+  save(Participant.integrated.1,file = paste(file_dir,"/rep",repl," sim.RData",sep = ""))
+
+  # # Identify the 10 most highly variable genes
+  # top10 <- head(VariableFeatures(Participant.integrated.1), 10)
+  # # plot variable features with and without labels
+  # plot1 <- VariableFeaturePlot(Participant.integrated.1)
+  # plot2 <- LabelPoints(plot = plot1, points = top10, repel = TRUE)
+  # plot1 + plot2
+  
+  # Participant.integrated.1 <- FindVariableFeatures(Participant.integrated.1, selection.method = "vst", nfeatures = 2000)
+  # Participant.integrated.1 <- RunPCA(Participant.integrated.1, features = VariableFeatures(object = Participant.integrated.1))
+  # Participant.integrated.1 <- RunPCA(Participant.integrated.1, features = Signal[[repl]], verbose = F)
+  # p_DimPlot[[repl]] <- DimPlot(Participant.integrated.1, reduction = "pca",label.size = 1)
+  
+  # gene set size from 10 to 500
+  noise <- c(0,0.2,0.5,0.8,1)
+  GS_size <- c(10,20,30,40,50,100,200,300,400,500)
+  up_sim<- list()
+  for (i in 1:length(noise)){
+    up_sim[[i]] <- paste("GS",c(rep(GS_size,each=100)),noise[i],1:100,sep = "_")
+  }
+  # create the gold-stander genesets
+  gs<- list()
+  set.seed(42)
+  for (i in 1:10){
+    N= GS_size[i]
+    for (sim in 1:100){
+      if (length(Signal[[repl]]) >= N){
+        gs[[up_sim[[1]][sim+100*(i-1)]]] <- c(sample(Signal[[repl]],size = N,replace = F))
+      } else{
+        gs[[up_sim[[1]][sim+100*(i-1)]]] <- 0
+      }
+    }
+  }
+  # create genesets with noise
+  set.seed(42)
+  for (i in 2:length(noise)){
+    for (j in 1:10){
+      N= GS_size[j]
+      for (sim in 1:100){
+        if (length(Signal[[repl]]) >= (N-N*noise[i])){
+          gs[[up_sim[[i]][sim+100*(j-1)]]] <- c(sample(Signal[[repl]],size = N*round((1-noise[i]),1),replace = F),sample(NonSignal[[repl]],size = N*noise[i],replace = F))
+        }
+        else{
+          gs[[up_sim[[i]][sim+100*(j-1)]]] <- 0
+        }
+      }
+    }
+  }
+  # make geneset.gmt file
+  file = paste(file_dir,"/rep",repl," GS.gmt",sep = "")
+  write.gmt <- function(gs,file){
+    sink(file)
+    lapply(names(gs),function(i){
+      cat(paste(c(i,'tmp',gs[[i]]),collapse = '\t'))
+      cat('\n')
+    })
+    sink()
+  }
+  write.gmt(gs,file)
+}
+
+# save
+saveRDS(rows_zeros.signal,file = "Scenario1_rows_zeros.signal.RWSD.rds")
+saveRDS(rows_zeros.nonsignal,file = "Scenario1_rows_zeros.nonsignal.RWSD.rds")
+```
+
+Scenario 2: 
+Remove undetected genes
+Randomly select 550 genes, and ddd signal to these genes in condition 2
+Signal is 100% from the selected genes, and Non-signal is from the remaining genes
+GS size 10-500, and Sample size 20,50,200,500
+```{r RWSD Scenario 2}
+setwd(File_dir)
+File_dir
+#Scenario_set = "Scenario 2 without signal"
+Scenario_set = "Scenario 2 scimpute"
+dir.create(Scenario_set)
+file_dir = paste0(File_dir,"/",Scenario_set)
+Genes <- list()
+Signal <- list()
+NonSignal <- list()
+Undetect <- list()
+rows_zeros.signal <- list()
+rows_zeros.nonsignal <- list()
+p_DimPlot<-list()
+
+for (repl in 1:10){
+  B_cell_subset <- Normal_Bcell[,colnames(Normal_Bcell)[sim.mc[,repl]]]
+  rownames(B_cell_subset@assays$RNA@data) <- paste0("gene",rep(1:dim(B_cell_subset)[1]))
+  B_cell_subset_meta_data <- data.frame(Condition=c(rep("Condition_1",cellcounts),rep("Condition_2",cellcounts))) # add condition meta
+  set.seed(42)
+  condition_1 <-sample(colnames(B_cell_subset),cellcounts,replace = F)
+  condition_2 <- setdiff(rownames(B_cell_subset@meta.data),condition_1)
+  rownames(B_cell_subset_meta_data) <- c(condition_1,condition_2)
+  B_cell_subset <- AddMetaData(B_cell_subset,metadata = B_cell_subset_meta_data)
+  Idents(B_cell_subset) <- 'Condition'
+  print(table(Idents(B_cell_subset)))
+  
+  ## ----Gene signature simulation--------------------------------------------------
+  rows_zeros = rowMeans(B_cell_subset@assays$RNA@data ==0)
+  # Scenario 1 select genes detected in at least one cell
+  Genes[[repl]] <- rownames(B_cell_subset@assays$RNA@data[rows_zeros < 1,])
+  print(paste("Detected gene count",length(Genes[[repl]])))
+  Undetect[[repl]] <- rownames(B_cell_subset@assays$RNA@data[rows_zeros == 1,])
+  print(paste("Undetect gene count",length(Undetect[[repl]])))
+  
+  # Assign signal
+  set.seed(42)
+  Signal[[repl]] <- sample(rownames(B_cell_subset@assays$RNA@data[rows_zeros < 1,]),550)
+  print(paste("Signal genes counts",length(Signal[[repl]])))
+  NonSignal[[repl]] <- Genes[[repl]][-which(Genes[[repl]] %in% Signal[[repl]]) ]
+  print(paste("Non singal gene count",length(NonSignal[[repl]])))
+  dat <- as.matrix(B_cell_subset@assays$RNA@data)
+  dat <- dat[rownames(dat) %in% Genes[[repl]],]
+  print(dim(dat))
+  dat[Signal[[repl]], which(B_cell_subset@meta.data$Condition %in% "Condition_2")] <- dat[Signal[[repl]], which(B_cell_subset@meta.data$Condition %in% "Condition_2")] * Signal_Level
+
+  # Create Seurat Object
+  Participant.integrated.1 <- CreateSeuratObject(counts = dat, project = "Scenario 2")
+  rows_zeros = rowMeans(Participant.integrated.1@assays$RNA@counts ==0)
+  names(rows_zeros) <- rownames(Participant.integrated.1)
+  rows_zeros.signal[[repl]] <- rows_zeros[Signal[[repl]]]
+  rows_zeros.nonsignal[[repl]] <- rows_zeros[NonSignal[[repl]]]
+  
+  Participant.integrated.1 <- ScaleData(Participant.integrated.1,verbose = F)
+  # Add condition meta
+  Participant.integrated.1 <- AddMetaData(Participant.integrated.1,metadata = B_cell_subset@meta.data$Condition ,col.name = 'Condition')
+  Idents(Participant.integrated.1) <- 'Condition'
+  table(Idents(Participant.integrated.1))
+  save(Participant.integrated.1,file = paste(file_dir,"/rep",repl," sim.RData",sep = ""))
+
+  #Participant.integrated.1 <- RunPCA(Participant.integrated.1, features = Signal[[repl]], verbose = F)
+  #p_DimPlot[[repl]] <- DimPlot(Participant.integrated.1, reduction = "pca",label.size = 1)
+
+  # gene set size from 10 to 500
+  noise <- c(0,0.2,0.5,0.8,1)
+  GS_size <- c(10,20,30,40,50,100,200,300,400,500)
+  up_sim<- list()
+  for (i in 1:length(noise)){
+    up_sim[[i]] <- paste("GS",c(rep(GS_size,each=100)),noise[i],1:100,sep = "_")
+  }
+  # create the gold-stander genesets
+  gs<- list()
+  set.seed(42)
+  for (i in 1:10){
+    N= GS_size[i]
+    for (sim in 1:100){
+      if (length(Signal[[repl]]) >= N){
+        gs[[up_sim[[1]][sim+100*(i-1)]]] <- c(sample(Signal[[repl]],size = N,replace = F))
+      } else{
+        gs[[up_sim[[1]][sim+100*(i-1)]]] <- 0
+      }
+    }
+  }
+  # create genesets with noise
+  set.seed(42)
+  for (i in 2:length(noise)){
+    for (j in 1:10){
+      N= GS_size[j]
+      for (sim in 1:100){
+        if (length(Signal[[repl]]) >= (N-N*noise[i])){
+          gs[[up_sim[[i]][sim+100*(j-1)]]] <- c(sample(Signal[[repl]],size = N*round((1-noise[i]),1),replace = F),sample(NonSignal[[repl]],size = N*noise[i],replace = F))
+        }
+        else{
+          gs[[up_sim[[i]][sim+100*(j-1)]]] <- 0
+        }
+      }
+    }
+  }
+  # make geneset.gmt file
+  file = paste(file_dir,"/rep",repl," GS.gmt",sep = "")
+  write.gmt <- function(gs,file){
+    sink(file)
+    lapply(names(gs),function(i){
+      cat(paste(c(i,'tmp',gs[[i]]),collapse = '\t'))
+      cat('\n')
+    })
+    sink()
+  }
+  write.gmt(gs,file)
+}
+
+# save
+# saveRDS(rows_zeros.signal,file = "Scenario2_rows_zeros.signal.RWSD.rds")
+# saveRDS(rows_zeros.nonsignal,file = "Scenario2_rows_zeros.nonsignal.RWSD.rds")
+```
+
+######## Uneuqual number of genes per condition  ##########
+Scenario 3: 
+Select densely expressed genes as for GS genes, and no signal was assigned to these genes in condition 2
+Add 250 new genes (densly expressed genes) in condition 2 only and keep condition 1 == 0
+Sample size 200 and GS size 10-500
+```{r real Scenario 3}
+setwd(File_dir)
+File_dir
+Scenario_set = "Scenario 3 scimpute"
+dir.create(Scenario_set)
+file_dir = paste0(File_dir,"/",Scenario_set)
+Genes <- list()
+Signal <- list()
+NonSignal <- list()
+Undetect <- list()
+
+for (repl in 1:10){
+  B_cell_subset <- Normal_Bcell[,colnames(Normal_Bcell)[sim.mc[,repl]]]
+  B_cell_subset_meta_data <- data.frame(Condition=c(rep("Condition_1",cellcounts),rep("Condition_2",cellcounts))) # add condition meta
+  rownames(B_cell_subset_meta_data) <- rownames(B_cell_subset@meta.data)
+  B_cell_subset <- AddMetaData(B_cell_subset,metadata = B_cell_subset_meta_data)
+  Idents(B_cell_subset) <- 'Condition'
+  table(Idents(B_cell_subset))
+  
+  ## ----Gene signature simulation--------------------------------------------------
+  rows_zeros = rowMeans(B_cell_subset@assays$RNA@data ==0)
+  # Scenario 1 select genes detected in at least one cell
+  Genes[[repl]] <- rownames(B_cell_subset@assays$RNA@data[rows_zeros < 1,])
+  print(paste("Detected gene count",length(Genes[[repl]])))
+  Undetect[[repl]] <- rownames(B_cell_subset@assays$RNA@data[rows_zeros == 1,])
+  print(paste("Undetect gene count",length(Undetect[[repl]])))
+  
+  # Assign signal
+  Signal[[repl]] <- rownames(B_cell_subset@assays$RNA@data[rows_zeros < Threshold,])
+  print(paste("Signal gene count",length(Signal[[repl]])))
+  NonSignal[[repl]] <- Genes[[repl]][-which(Genes[[repl]] %in% Signal[[repl]]) ]
+  print(paste("Non singal gene count",length(NonSignal[[repl]])))
+  dat <- as.matrix(B_cell_subset@assays$RNA@data)
+  dat <- dat[rownames(dat) %in% Genes[[repl]],]
+  dat[Signal[[repl]], which(B_cell_subset@meta.data$Condition %in% "Condition_2")] <- dat[Signal[[repl]], which(B_cell_subset@meta.data$Condition %in% "Condition_2")] * Signal_Level
+  print(dim(dat))
+  
+  B_cell_subset <- Normal_Bcell[,colnames(Normal_Bcell)[sim.mc[,repl+1]]]
+  B_cell_subset_meta_data <- data.frame(Condition=c(rep("Condition_1",cellcounts),rep("Condition_2",cellcounts))) # add condition meta
+  rownames(B_cell_subset_meta_data) <- rownames(B_cell_subset@meta.data)
+  B_cell_subset <- AddMetaData(B_cell_subset,metadata = B_cell_subset_meta_data)
+  rows_zeros = rowMeans(B_cell_subset@assays$RNA@data ==0)
+  Add_gene <- sample(rownames(B_cell_subset@assays$RNA@data[rows_zeros < Threshold,]),250,replace = F)
+  print(paste("add gene count",length(Add_gene)))
+  dat.1 <- as.matrix(B_cell_subset@assays$RNA@data)
+  dat.1 <- dat.1[rownames(dat.1) %in% Add_gene,]
+  print(dim(dat.1))
+  dat.1[,which(B_cell_subset@meta.data$Condition %in% "Condition_1")] <- 0
+  rownames(dat.1) <- paste0(Add_gene,"add")
+  dat <- rbind(dat,dat.1)
+  print(dim(dat))
+  NonSignal[[repl]] <- c(NonSignal[[repl]],paste0(Add_gene,"add"))
+  print(paste("Non singal gene count (+newly add genes)",length(NonSignal[[repl]])))
+  
+  # Create Seurat Object
+  Participant.integrated.1 <- CreateSeuratObject(counts = dat)
+  Participant.integrated.1 <- ScaleData(Participant.integrated.1,verbose = F)
+  # Add condition meta
+  Participant.integrated.1 <- AddMetaData(Participant.integrated.1,metadata = B_cell_subset@meta.data$Condition ,col.name = 'Condition')
+  save(Participant.integrated.1,file = paste(file_dir,"/rep",repl," sim.RData",sep = ""))
+  
+  # gene set size from 10 to 500
+  noise <- c(0,0.2,0.5,0.8,1)
+  GS_size <- c(10,20,30,40,50,100,200,300,400,500)
+  up_sim<- list()
+  for (i in 1:length(noise)){
+    up_sim[[i]] <- paste("GS",c(rep(GS_size,each=100)),noise[i],1:100,sep = "_")
+  }
+  # create the gold-stander genesets
+  gs<- list()
+  set.seed(42)
+  for (i in 1:10){
+    N= GS_size[i]
+    for (sim in 1:100){
+      if (length(Signal[[repl]]) >= N){
+        gs[[up_sim[[1]][sim+100*(i-1)]]] <- c(sample(Signal[[repl]],size = N,replace = F))
+      } else{
+        gs[[up_sim[[1]][sim+100*(i-1)]]] <- 0
+      }
+    }
+  }
+  # create genesets with noise
+  set.seed(42)
+  for (i in 2:length(noise)){
+    for (j in 1:10){
+      N= GS_size[j]
+      for (sim in 1:100){
+        if (length(Signal[[repl]]) >= (N-N*noise[i])){
+          gs[[up_sim[[i]][sim+100*(j-1)]]] <- c(sample(Signal[[repl]],size = N*round((1-noise[i]),1),replace = F),sample(NonSignal[[repl]],size = N*noise[i],replace = F))
+        }
+        else{
+          gs[[up_sim[[i]][sim+100*(j-1)]]] <- 0
+        }
+      }
+    }
+  }
+  # make geneset.gmt file
+  file = paste(file_dir,"/rep",repl," GS.gmt",sep = "")
+  write.gmt <- function(gs,file){
+    sink(file)
+    lapply(names(gs),function(i){
+      cat(paste(c(i,'tmp',gs[[i]]),collapse = '\t'))
+      cat('\n')
+    })
+    sink()
+  }
+  write.gmt(gs,file)
+}
+```
+
+Scenario 4: 
+Randomly selected gene as for GS genes, and no signal was assigned to these genes in condition 2
+Add 250 new genes (randomly selecet 250 expressed genes) in condition 2 only and keep condition 1 == 0
+Sample size 200 and GS size 10-500
+```{r real Scenario 4}
+setwd(File_dir)
+File_dir
+Scenario_set = "Scenario 4 scimpute"
+dir.create(Scenario_set)
+file_dir = paste0(File_dir,"/",Scenario_set)
+Genes <- list()
+Signal <- list()
+NonSignal <- list()
+Undetect <- list()
+
+for (repl in 1:10){
+  B_cell_subset <- Normal_Bcell[,colnames(Normal_Bcell)[sim.mc[,repl]]]
+  B_cell_subset_meta_data <- data.frame(Condition=c(rep("Condition_1",cellcounts),rep("Condition_2",cellcounts))) # add condition meta
+  rownames(B_cell_subset_meta_data) <- rownames(B_cell_subset@meta.data)
+  B_cell_subset <- AddMetaData(B_cell_subset,metadata = B_cell_subset_meta_data)
+  Idents(B_cell_subset) <- 'Condition'
+  table(Idents(B_cell_subset))
+  
+  ## ----Gene signature simulation--------------------------------------------------
+  rows_zeros = rowMeans(B_cell_subset@assays$RNA@data ==0)
+  # Scenario 1 select genes detected in at least one cell
+  Genes[[repl]] <- rownames(B_cell_subset@assays$RNA@data[rows_zeros < 1,])
+  print(paste("Detected gene count",length(Genes[[repl]])))
+  Undetect[[repl]] <- rownames(B_cell_subset@assays$RNA@data[rows_zeros == 1,])
+  print(paste("Undetect gene count",length(Undetect[[repl]])))
+  
+  # Assign signal
+  Signal[[repl]] <- sample(rownames(B_cell_subset@assays$RNA@data[rows_zeros < 1,]),550)
+  print(paste("Signal gene count",length(Signal[[repl]])))
+  NonSignal[[repl]] <- Genes[[repl]][-which(Genes[[repl]] %in% Signal[[repl]]) ]
+  print(paste("Non singal gene count",length(NonSignal[[repl]])))
+  dat <- as.matrix(B_cell_subset@assays$RNA@data)
+  dat <- dat[rownames(dat) %in% Genes[[repl]],]
+  dat[Signal[[repl]], which(B_cell_subset@meta.data$Condition %in% "Condition_2")] <- dat[Signal[[repl]], which(B_cell_subset@meta.data$Condition %in% "Condition_2")] * Signal_Level
+  print(dim(dat))
+  
+  B_cell_subset <- Normal_Bcell[,colnames(Normal_Bcell)[sim.mc[,repl+1]]]
+  B_cell_subset_meta_data <- data.frame(Condition=c(rep("Condition_1",cellcounts),rep("Condition_2",cellcounts))) # add condition meta
+  rownames(B_cell_subset_meta_data) <- rownames(B_cell_subset@meta.data)
+  B_cell_subset <- AddMetaData(B_cell_subset,metadata = B_cell_subset_meta_data)
+  rows_zeros = rowMeans(B_cell_subset@assays$RNA@data ==0)
+  Add_gene <- sample(rownames(B_cell_subset@assays$RNA@data[rows_zeros < 1,]),250,replace = F)
+  print(paste("add gene count",length(Add_gene)))
+  dat.1 <- as.matrix(B_cell_subset@assays$RNA@data)
+  dat.1 <- dat.1[rownames(dat.1) %in% Add_gene,]
+  print(dim(dat.1))
+  dat.1[,which(B_cell_subset@meta.data$Condition %in% "Condition_1")] <- 0
+  rownames(dat.1) <- paste0(Add_gene,"add")
+  dat <- rbind(dat,dat.1)
+  print(dim(dat))
+  NonSignal[[repl]] <- c(NonSignal[[repl]],paste0(Add_gene,"add"))
+  print(paste("Non singal gene count (+newly add genes)",length(NonSignal[[repl]])))
+  
+  # Create Seurat Object
+  Participant.integrated.1 <- CreateSeuratObject(counts = dat)
+  Participant.integrated.1 <- ScaleData(Participant.integrated.1,verbose = F)
+  # Add condition meta
+  Participant.integrated.1 <- AddMetaData(Participant.integrated.1,metadata = B_cell_subset@meta.data$Condition ,col.name = 'Condition')
+  save(Participant.integrated.1,file = paste(file_dir,"/rep",repl," sim.RData",sep = ""))
+  
+  # gene set size from 10 to 500
+  noise <- c(0,0.2,0.5,0.8,1)
+  GS_size <- c(10,20,30,40,50,100,200,300,400,500)
+  up_sim<- list()
+  for (i in 1:length(noise)){
+    up_sim[[i]] <- paste("GS",c(rep(GS_size,each=100)),noise[i],1:100,sep = "_")
+  }
+  # create the gold-stander genesets
+  gs<- list()
+  set.seed(42)
+  for (i in 1:10){
+    N= GS_size[i]
+    for (sim in 1:100){
+      if (length(Signal[[repl]]) >= N){
+        gs[[up_sim[[1]][sim+100*(i-1)]]] <- c(sample(Signal[[repl]],size = N,replace = F))
+      } else{
+        gs[[up_sim[[1]][sim+100*(i-1)]]] <- 0
+      }
+    }
+  }
+  # create genesets with noise
+  set.seed(42)
+  for (i in 2:length(noise)){
+    for (j in 1:10){
+      N= GS_size[j]
+      for (sim in 1:100){
+        if (length(Signal[[repl]]) >= (N-N*noise[i])){
+          gs[[up_sim[[i]][sim+100*(j-1)]]] <- c(sample(Signal[[repl]],size = N*round((1-noise[i]),1),replace = F),sample(NonSignal[[repl]],size = N*noise[i],replace = F))
+        }
+        else{
+          gs[[up_sim[[i]][sim+100*(j-1)]]] <- 0
+        }
+      }
+    }
+  }
+  # make geneset.gmt file
+  file = paste(file_dir,"/rep",repl," GS.gmt",sep = "")
+  write.gmt <- function(gs,file){
+    sink(file)
+    lapply(names(gs),function(i){
+      cat(paste(c(i,'tmp',gs[[i]]),collapse = '\t'))
+      cat('\n')
+    })
+    sink()
+  }
+  write.gmt(gs,file)
+}
+```
+

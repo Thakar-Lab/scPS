@@ -1,0 +1,223 @@
+---
+title: "NAR scimpute"
+output: html_document
+date: "2023-10-11"
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = F)
+library(dplyr)
+library(ggsci)
+library(scales)
+library(ggplot2)
+library(ggthemes)
+library(magrittr)
+library(tidyverse)
+library(patchwork)
+library(cowplot)
+#library(ggshadow)
+
+rm(list =ls())
+# set the color for each GSA method
+mypal = c("#A7CEE2","#428DBF","#F0E442","#E0271E","#EB8E47","#7A52A6","#C1A9D2")
+show_col(mypal)
+names(mypal) <- c("AddModuleScore","AUCell","JASMINE","scPS","SCSE","UCell","ssGSEA")
+# set the theme for ggplot2
+My_Theme <- theme(axis.ticks = element_blank(),
+                  legend.title=element_blank(),
+                  legend.position = "top", 
+                  legend.direction = "vertical", 
+                  legend.justification='center',
+                  plot.caption = element_text(hjust = 0.5, vjust = -1, size=14),
+                  panel.background = element_rect(fill = NA),
+                  panel.grid.major = element_line(colour = "#e6e6e6"),
+                  panel.ontop = F,
+                  panel.border = element_rect(color = "#333333", fill = NA, size = 1))
+
+```
+RWSD scenario 1 scimpute
+```{r}
+# scenario 2 sample size = 200
+setwd("/Users/rwang4/Library/CloudStorage/Box-Box/Ruoqiao Thakar Lab/Single-cell Pathway Score (scPS)/Data & results/RWSD/")
+dat1 <- read.csv("Sample size 200/Scenario 1 scimpute/Two side dat matrix 2.csv",header = T,row.names = 1)
+Methods <- c("ssGSEA","JASMINE","AUCell","UCell","scPS","SCSE","AddModuleScore")
+dat1$Methods <- rep(Methods,dim(dat1)[1]/7)
+dat1$cells <- 200
+dat1$Scenario <- "Scenario 1"
+dat1$Noise <- rep(rep(c("0","20","50","80","100"), each=dim(dat1)[1]/50),10)
+dat1$GSsize <- rep(c(10,20,30,40,50,100,200,300,400,500),each=dim(dat1)[1]/10)
+
+# get mean & standard deviation by method
+data_msd <- dat1 %>% group_by(Methods,geneset,GSsize) %>%
+            summarise_at(vars(count),list(mean = mean,sd = sd)) %>% as.data.frame()
+
+# set with gene set size = 100, cell count = 200
+data_msd.2 <- data_msd[grep("-0-",data_msd$geneset),]
+data_msd.2$GSsize <-  factor(data_msd.2$GSsize, levels = c("10","20","30","40","50","100","200","300","400","500"))
+data_msd.2$Methods <- factor(data_msd.2$Methods, levels=c("AddModuleScore","AUCell","JASMINE","scPS","SCSE","UCell","ssGSEA"))
+
+
+# lineplot
+min(data_msd.2$mean-data_msd.2$sd)
+p.rwsd.1 <- ggplot(data = data_msd.2) +
+  geom_line(aes(x=GSsize, y=mean, linetype = Methods, group=Methods, color=Methods), size=1, alpha=0.8) +
+  geom_ribbon(aes(GSsize, ymin = mean-1, ymax = mean+1, group=Methods, fill=Methods), alpha = 0.1) +
+  geom_point(aes(x=GSsize, y=mean,color=Methods),size=2, alpha=0.8) +
+  scale_fill_manual(values = mypal)+
+  scale_color_manual(values = mypal)+
+  geom_errorbar(aes(x=GSsize, y=mean,ymin=mean-sd, ymax=mean+sd, color=Methods), width=0.3, size=1, alpha=0.8, position=position_dodge(0.001))+
+  scale_y_continuous(breaks = c(0, 20, 40, 60, 80, 100),limits = c(-22,120))+ 
+  labs(x="GS size", y = "Recovery rate (%)") +
+  My_Theme+  guides(fill=guide_legend(nrow=1)) 
+
+
+p.rwsd.1
+```
+
+
+RWSD scenario 2 scimpute
+```{r}
+# scenario 2 sample size = 200
+setwd("/Users/rwang4/Library/CloudStorage/Box-Box/Ruoqiao Thakar Lab/Single-cell Pathway Score (scPS)/Data & results/RWSD/")
+dat1 <- read.csv("Sample size 200/Scenario 2 scimpute/Two side dat matrix 2.csv",header = T,row.names = 1)
+Methods <- c("ssGSEA","JASMINE","AUCell","UCell","scPS","SCSE","AddModuleScore")
+dat1$Methods <- rep(Methods,dim(dat1)[1]/7)
+dat1$cells <- 200
+dat1$Scenario <- "Scenario 2"
+dat1$Noise <- rep(rep(c("0","20","50","80","100"), each=dim(dat1)[1]/50),10)
+dat1$GSsize <- rep(c(10,20,30,40,50,100,200,300,400,500),each=dim(dat1)[1]/10)
+
+# get mean & standard deviation by method
+data_msd <- dat1 %>% group_by(Methods,geneset,GSsize) %>%
+            summarise_at(vars(count),list(mean = mean,sd = sd)) %>% as.data.frame()
+
+# set with gene set size = 100, cell count = 200
+data_msd.2 <- data_msd[grep("-0-",data_msd$geneset),]
+data_msd.2$GSsize <-  factor(data_msd.2$GSsize, levels = c("10","20","30","40","50","100","200","300","400","500"))
+data_msd.2$Methods <- factor(data_msd.2$Methods, levels=c("AddModuleScore","AUCell","JASMINE","scPS","SCSE","UCell","ssGSEA"))
+
+
+# lineplot
+min(data_msd.2$mean-data_msd.2$sd)
+p.rwsd.2 <- ggplot(data = data_msd.2) +
+  geom_line(aes(x=GSsize, y=mean, linetype = Methods, group=Methods, color=Methods), size=1, alpha=0.8) +
+  geom_ribbon(aes(GSsize, ymin = mean-1, ymax = mean+1, group=Methods, fill=Methods), alpha = 0.1) +
+  geom_point(aes(x=GSsize, y=mean,color=Methods),size=2, alpha=0.8) +
+  scale_fill_manual(values = mypal)+
+  scale_color_manual(values = mypal)+
+  geom_errorbar(aes(x=GSsize, y=mean,ymin=mean-sd, ymax=mean+sd, color=Methods), width=0.3, size=1, alpha=0.8, position=position_dodge(0.001))+
+  scale_y_continuous(breaks = c(0, 20, 40, 60, 80, 100),limits = c(-22,120))+ 
+  labs(x="GS size", y = "Recovery rate (%)") +
+  My_Theme+  guides(fill=guide_legend(nrow=1)) 
+
+
+p.rwsd.2
+```
+
+
+RWSD scenario 1  scimpute
+p.rwsd.11
+```{r}
+# scenario 1 sample size = 200
+setwd("/Users/rwang4/Library/CloudStorage/Box-Box/Ruoqiao Thakar Lab/Single-cell Pathway Score (scPS)/Data & results/RWSD")
+dat1 <- read.csv("Sample size 200/Scenario 1 scimpute/Two side dat matrix 2.csv",header = T,row.names = 1)
+Methods <- c("ssGSEA","JASMINE","AUCell","UCell","scPS","SCSE","AddModuleScore")
+dat1$Methods <- rep(Methods,dim(dat1)[1]/7)
+dat1$cells <- 200
+dat1$Scenario <- "Scenario 1"
+dat1$Noise <- rep(rep(c("0","20","50","80","100"), each=dim(dat1)[1]/50),10)
+
+# get mean & standard deviation by method
+data_msd <- dat1 %>% group_by(Methods,geneset,Noise) %>%
+            summarise_at(vars(count),list(mean = mean,sd = sd)) %>% as.data.frame()
+
+# set with gene set size = 100, cell count = 200
+data_msd.2 <- data_msd[grep("GS-100-",data_msd$geneset),]
+data_msd.2$Noise <-  factor(data_msd.2$Noise, levels = c("0","20","50","80","100"))
+data_msd.2$Methods <- factor(data_msd.2$Methods, levels=c("AddModuleScore","AUCell","JASMINE","scPS","SCSE","UCell","ssGSEA"))
+
+# lineplot
+min(data_msd.2$mean-data_msd.2$sd)
+p.rwsd.11 <- ggplot(data = data_msd.2) +
+  geom_line(aes(x=Noise, y=mean, linetype = Methods, group=Methods, color=Methods), size=1, alpha=0.8) +
+  geom_point(aes(x=Noise, y=mean,color=Methods),size=2, alpha=0.8) +
+  scale_fill_manual(values = mypal)+
+  scale_color_manual(values = mypal)+
+  geom_errorbar(aes(x=Noise, y=mean,ymin=mean-sd, ymax=mean+sd, color=Methods), width=0.3, size=1, alpha=0.8, position=position_dodge(0.001))+
+  scale_y_continuous(breaks = c(0, 20, 40, 60, 80, 100),limits = c(-22,120))+ 
+  labs(x="Noise level (%)", y = "Recovery rate (%)") +
+  My_Theme +  guides(color=guide_legend(nrow=1)) 
+
+p.rwsd.11
+
+# Recovery rate 
+data_msd.2[data_msd.2$geneset=="GS-100-0-",]$sd <- round(data_msd.2[data_msd.2$geneset=="GS-100-0-",]$sd,2)
+data_msd.2[data_msd.2$geneset=="GS-100-0-",]
+# False Positive rate 
+data_msd.2[data_msd.2$geneset=="GS-100-1-",]$sd <- round(data_msd.2[data_msd.2$geneset=="GS-100-1-",]$sd,2)
+data_msd.2[data_msd.2$geneset=="GS-100-1-",]
+```
+
+RWSD scenario 2
+p.rwsd.22
+```{r}
+# scenario 1 sample size = 200
+setwd("/Users/rwang4/Library/CloudStorage/Box-Box/Ruoqiao Thakar Lab/Single-cell Pathway Score (scPS)/Data & results/RWSD")
+dat1 <- read.csv("Sample size 200/Scenario 2 scimpute/Two side dat matrix 2.csv",header = T,row.names = 1)
+Methods <- c("ssGSEA","JASMINE","AUCell","UCell","scPS","SCSE","AddModuleScore")
+dat1$Methods <- rep(Methods,dim(dat1)[1]/7)
+dat1$cells <- 200
+dat1$Scenario <- "Scenario 2"
+dat1$Noise <- rep(rep(c("0","20","50","80","100"), each=dim(dat1)[1]/50),10)
+
+
+# get mean & standard deviation by method
+data_msd <- dat1 %>% group_by(Methods,geneset,Noise) %>%
+            summarise_at(vars(count),list(mean = mean,sd = sd)) %>% as.data.frame()
+
+# set with gene set size = 100, cell count = 200
+data_msd.2 <- data_msd[grep("GS-100-",data_msd$geneset),]
+data_msd.2$Noise <-  factor(data_msd.2$Noise, levels = c("0","20","50","80","100"))
+data_msd.2$Methods <- factor(data_msd.2$Methods, levels=c("AddModuleScore","AUCell","JASMINE","scPS","SCSE","UCell","ssGSEA"))
+
+# lineplot
+min(data_msd.2$mean-data_msd.2$sd)
+p.rwsd.22 <- ggplot(data = data_msd.2) +
+  geom_line(aes(x=Noise, y=mean, linetype = Methods, group=Methods, color=Methods), size=1, alpha=0.8) +
+  geom_point(aes(x=Noise, y=mean,color=Methods),size=2, alpha=0.8) +
+  scale_fill_manual(values = mypal)+
+  scale_color_manual(values = mypal)+
+  geom_errorbar(aes(x=Noise, y=mean,ymin=mean-sd, ymax=mean+sd, color=Methods), width=0.3, size=1, alpha=0.8, position=position_dodge(0.001))+
+  scale_y_continuous(breaks = c(0, 20, 40, 60, 80, 100),limits = c(-22,120))+ 
+  labs(x="Noise level (%)", y = "Recovery rate (%)") +
+  My_Theme +  guides(color=guide_legend(nrow=1)) 
+
+p.rwsd.22
+
+# Recovery rate 
+data_msd.2[data_msd.2$geneset=="GS-100-0-",]$sd <- round(data_msd.2[data_msd.2$geneset=="GS-100-0-",]$sd,2)
+data_msd.2[data_msd.2$geneset=="GS-100-0-",]
+# False Positive rate 
+data_msd.2[data_msd.2$geneset=="GS-100-1-",]$sd <- round(data_msd.2[data_msd.2$geneset=="GS-100-1-",]$sd,2)
+data_msd.2[data_msd.2$geneset=="GS-100-1-",]
+
+```
+
+plot for scenario 1 and 2
+```{r}
+library(ggpubr)
+p <- ggarrange(p.rwsd.1, p.rwsd.2, 
+          p.rwsd.11, p.rwsd.22,
+          nrow =2,
+          ncol =2,
+          align='h', 
+          labels=c('A', 'B','C','D'),
+          common.legend = T)
+
+p
+pdf('/Users/ruoqiaowang/Desktop/scimpute.pdf', width = 10, height = 8)
+p
+dev.off()
+```
