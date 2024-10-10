@@ -139,3 +139,6 @@ print(length(predBind))
 
 Result <- scPS(obj,predBind) # calling scPS
 
+# if you get the NA value, please check your rownames(Seurat_data[["RNA"]]@layers$data) or rownames(Seurat_data[["SCT"]]@layers$data) != NULL
+# or assign the data with the correct gene name
+# rownames(Seurat_data[["RNA"]]@layers$data) = rownames(obj[["RNA"]]) 
