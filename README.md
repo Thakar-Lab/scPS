@@ -3,9 +3,11 @@
 scPS is a single-cell RNA-seq gene set analysis (scGSA) method designed to evaluate gene set activity at the single-cell level. It utilizes functions within an R script, eliminating the need for additional installation. The tool integrates seamlessly with Seurat V5 objects for efficient pathway scoring across thousands of cells.
 
 ## ✨ Features
-Input:  A Seurat object (Seurat V5 is required)
- 	A gene set file in GMT (Gene Matrix Transposed) format. This file should contain gene set names, descriptions, and the associated genes.
-Output: A matrix where rows correspond to gene sets/pathways and columns correspond to single cells, with each cell assigned a score for each gene set or pathway.
+	Input:
+	•	A Seurat object (Seurat V5 is required)
+	•	A gene set file in GMT (Gene Matrix Transposed) format. This file should contain gene set names, descriptions, and the associated genes.
+	Output:
+	•	A matrix where rows correspond to gene sets/pathways and columns correspond to single cells, with each cell assigned a score for each gene set or pathway.
 
 ## 🛠️ How to Use scPS
 ```R
