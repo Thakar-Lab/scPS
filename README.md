@@ -13,12 +13,12 @@ scPS is a single-cell RNA-seq gene set analysis (scGSA) method designed to evalu
 ```R
 Seurat_data = Input Seurat object  
 GeneSet = Gene set gmt file  
-Result = scPS(Seurat_data, GeneSet)  # Calling scPS  
+Result = scPS(Seurat_data, GeneSet)  #Calling scPS  
 ```
 
 ## 📚 Required Libraries
 ```R
-library(Seurat)  # Seurat V5
+library(Seurat)  #Seurat V5
 library(GSEABase)
 library(genefilter)
 ```
@@ -33,7 +33,7 @@ Ruoqiao Wang (Email: RuoQiao_Wang@URMC.Rochester.edu)
 
 ## 📄 Citation
 
-Please cite the following article when using scPS in your research:
+Please cite the following article when using `scPS`:
 
 [Wang, R. H., & Thakar, J. (2024)](https://academic.oup.com/nargab/article/6/3/lqae124/7770961). Comparative analysis of single-cell pathway scoring methods and a novel approach. NAR Genomics and Bioinformatics, 6(3), lqae124
 
