@@ -1,31 +1,38 @@
-# scPS 
-### (single-cell Pathway Score) 
-#### scPS is a single-cell RNA-seq gene set analysis (scGSA) method using the functions in R script (without installation)
+scPS (Single-Cell Pathway Score) 📊
 
-###   Input Data: 
-#### 1. A Seurat object (Seurat V5 are required), 
-#### 2. A gene matrix transposed (GMT) file format of gene sets/pathways. Each gene set is described by a name, a description, and the genes in the gene set. 
+scPS is a single-cell RNA-seq gene set analysis (scGSA) method designed to evaluate gene set activity at the single-cell level. It utilizes functions within an R script, eliminating the need for additional installation. The tool integrates seamlessly with Seurat V5 objects for efficient pathway scoring across thousands of cells.
 
-###   Output:
-####   1. Single cells with corresponding scores for gene sets/pathways data matrix, where rows correspond to gene sets/pathways and columns correspond to cells.
+✨ Features
+	•	Input:
+	•	A Seurat object (Seurat V5 is required)
+	•	A gene set file in GMT (Gene Matrix Transposed) format. This file should contain gene set names, descriptions, and the associated genes.
+	•	Output:
+	•	A matrix where rows correspond to gene sets/pathways and columns correspond to single cells, with each cell assigned a score for each gene set or pathway.
 
-### How to Apply scPS Function
-#### Seurat_data = Input Seurat object
-#### GeneSet = Gene set gmt file
-Result  =  scPS(Seurat_data,GeneSet) # calling scPS 
+🛠️ How to Use scPS
+```R
+Seurat_data = Input Seurat object  
+GeneSet = Gene set gmt file  
+Result = scPS(Seurat_data, GeneSet)  # Calling scPS  
 
-### libraries required
-library(Seurat) #Seurat V5
+📚 Required Libraries
+```R
+library(Seurat)  # Seurat V5
 library(GSEABase)
 library(genefilter)
 
-All the raw data for the data simulation and comparative analysis can be found at the following link: 
-https://drive.google.com/drive/folders/1Gvp4ydnJbHZEDIxLjyt0xrQcbMziwDBF?usp=drive_link
+🔗 Data Availability
 
-###     Authors:Ruoqiao Wang and Juilee Thakar
-###     Email:RuoQiao_Wang@URMC.Rochester.edu and juilee_thakar@urmc.rochester.edu
+The raw data for simulation and comparative analysis are available here:https://drive.google.com/drive/folders/1Gvp4ydnJbHZEDIxLjyt0xrQcbMziwDBF
 
-# Please cite the following article when using scPS:
-Wang, R. H., & Thakar, J. (2024). Comparative analysis of single-cell pathway scoring methods and a novel approach. NAR Genomics and Bioinformatics, 6(3), lqae124.
-https://doi.org/10.1093/nargab/lqae124
+👩‍🔬 Authors
 
+	•	Ruoqiao Wang (Email: RuoQiao_Wang@URMC.Rochester.edu)
+
+ 📄 Citation
+
+Please cite the following article when using scPS in your research:
+
+Wang, R. H., & Thakar, J. (2024). Comparative analysis of single-cell pathway scoring methods and a novel approach. NAR Genomics and Bioinformatics, 6(3), lqae124
+
+https://academic.oup.com/nargab/article/6/3/lqae124/7770961
