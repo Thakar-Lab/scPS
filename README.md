@@ -33,8 +33,9 @@ Ruoqiao Wang (Email: RuoQiao_Wang@URMC.Rochester.edu)
 
 ## 📄 Citation
 
-Please cite the following article when using `scPS`:
+:sparkles: **Please cite when using** `scPS` :sparkles:
 
 [Wang, R. H., & Thakar, J. (2024)](https://academic.oup.com/nargab/article/6/3/lqae124/7770961). Comparative analysis of single-cell pathway scoring methods and a novel approach. NAR Genomics and Bioinformatics, 6(3), lqae124
+[DOI: 10.1093/nargab/lqae124](https://doi.org/10.1093/nargab/lqae124)
 
 
