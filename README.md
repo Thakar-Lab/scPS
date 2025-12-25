@@ -1,6 +1,7 @@
-# scPS (Single-Cell Pathway Score) 📊
-![](scPS.png)
-
+<p align="left">
+  <img src="scPS.png" width="100">
+</p>
+# scPS (Single-Cell Pathway Score)
 scPS is a single-cell RNA-seq gene set analysis (scGSA) method designed to evaluate gene set activity at the single-cell level. It utilizes functions within an R script, eliminating the need for additional installation. The tool integrates seamlessly with Seurat V5 objects for efficient pathway scoring across thousands of cells.
 
 ## ✨ Features
